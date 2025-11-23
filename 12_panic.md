@@ -36,13 +36,26 @@ The Location type contains:
 - A `u32` for the line number
 - A `u32` for the column number
 
-**Binary Representation (64-bit):**
+**Binary Representation (64-bit, both x86-64 and ARM64):**
 ```
 Offset 0x00: Pointer to file path string (8 bytes)
 Offset 0x08: Length of file path string (8 bytes)
 Offset 0x10: Line number (4 bytes)
 Offset 0x14: Column number (4 bytes)
+Total: 20 bytes (with 4 bytes padding to 24 bytes for alignment)
 ```
+
+**Calling Convention for Panic Functions:**
+
+When `rust_begin_unwind` or similar panic functions are called:
+
+**x86-64:**
+- First argument (panic message `&str`): pointer in `rdi`, length in `rsi`
+- Second argument (`&Location`): pointer to Location structure in `rdx`
+
+**ARM64:**
+- First argument (panic message `&str`): pointer in `x0`, length in `x1`
+- Second argument (`&Location`): pointer to Location structure in `x2`
 
 **Extraction Benefits:**
 All of this information is embedded in Rust binaries by default and is recoverable statically. You can:

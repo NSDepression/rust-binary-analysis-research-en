@@ -30,6 +30,15 @@ IDA Pro was used for disassembling binaries. The version of IDA Pro used in this
 
 * IDA Pro v8.3.230608
 
+**Note on Architecture Coverage:**
+While the primary investigations were conducted on x86-64 (Windows MSVC), this documentation has been enhanced to include ARM64 (AArch64) architecture details where applicable, particularly for:
+- Calling conventions and register usage
+- Fat pointer parameter passing
+- VTable structures and access patterns
+- Assembly instruction patterns
+
+The core memory layouts and data structures remain consistent across architectures with the same pointer size (64-bit vs 32-bit), with the main differences being in instruction sets and calling conventions.
+
 ## Investigation Topics
 
 This report summarizes the results of investigations on the following topics:
@@ -64,13 +73,33 @@ This report summarizes the results of investigations on the following topics:
 
 For further reading on Rust binary reverse engineering:
 
+### General Rust Reverse Engineering
+
 * **[CheckPoint Research: Rust Binary Analysis, Feature by Feature](https://research.checkpoint.com/2023/rust-binary-analysis-feature-by-feature/)** - Comprehensive analysis of Rust binary characteristics including monomorphization, vtables, and trait objects
 
 * **[Cindy Xiao's Blog: Panic Metadata in Rust Binaries](https://www.cxiao.net/posts/rust-re-panic-metadata/)** - Detailed exploration of extracting and utilizing panic metadata for reverse engineering
 
+* **[Reconstructing Rust Types - RE//verse 2025](https://github.com/cxiao/reconstructing-rust-types-talk-re-verse-2025)** - Cindy Xiao's presentation materials on practical techniques to reconstruct Rust structures
+
+* **[Rust for the Working Reverse Engineer](https://cxiao.net/categories/rust-for-the-working-reverse-engineer/)** - Blog series covering Rust reverse engineering topics
+
+### Memory Layouts and Data Structures
+
 * **[Rust: How are Strings stored in memory?](https://medium.com/rustaceans/rust-how-are-strings-stored-in-memory-01d29ec79844)** - In-depth analysis of String and &str memory layouts
 
 * **[Memory layout of a Rust program](https://shbhmrzd.github.io/2024/08/31/memory_layout_of_a_rust_program.html)** - Overview of Rust program memory organization
+
+* **[Exploring Rust Fat Pointers](https://iandouglasscott.com/2018/05/28/exploring-rust-fat-pointers/)** - Detailed examination of fat pointer structures
+
+* **[Understanding Rust's Trait Objects](https://medium.com/software-design/understanding-rusts-trait-objects-224b1d8daede)** - Trait objects, vtables, and dynamic dispatch
+
+### ARM64 Architecture
+
+* **[AArch64 Procedure Call Standard (AAPCS64)](https://medium.com/@tunacici7/aarch64-procedure-call-standard-aapcs64-abi-calling-conventions-machine-registers-a2c762540278)** - ARM64 calling conventions and register usage
+
+* **[The AArch64 Calling Convention](https://devblogs.microsoft.com/oldnewthing/20220823-00/?p=107041)** - Microsoft's guide to ARM64 calling conventions
+
+* **[ARM64 Assembly Language Notes](https://cit.dixie.edu/cs/2810/arm64-assembly.html)** - Reference for ARM64 assembly instructions
 
 ## Requests and Corrections
 

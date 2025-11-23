@@ -140,8 +140,32 @@ When analyzing Rust binaries:
 
 5. **String Manipulation:** String operations that modify content require a String type (heap-allocated), while read-only operations can use &str slices efficiently.
 
+### Architecture-Specific Details
+
+#### x86-64 (x64)
+When passing `&str` as a function parameter:
+- The **pointer** (address of string data) is typically passed in the `rdi` register
+- The **length** (usize) is typically passed in the `rsi` register
+
+This follows the System V AMD64 ABI calling convention commonly used on Unix-like systems.
+
+#### ARM64 (AArch64)
+When passing `&str` as a function parameter:
+- The **pointer** (address of string data) is passed in the `x0` register
+- The **length** (usize) is passed in the `x1` register
+
+This follows the ARM64 (AArch64) calling convention where the first eight parameters use registers x0-x7. Since `&str` is a fat pointer consisting of two pointer-sized values (16 bytes total on 64-bit platforms), it occupies two consecutive registers.
+
+**Key Points:**
+- Both architectures use the same memory layout (pointer + length)
+- The difference is only in which registers are used for parameter passing
+- Return values follow similar patterns (x86-64 uses `rax`/`rdx`, ARM64 uses `x0`/`x1`)
+- On both platforms, the fat pointer structure is 16 bytes (two 8-byte values)
+
 ## References
 
 For more detailed information:
 - [Rust: How are Strings stored in memory?](https://medium.com/rustaceans/rust-how-are-strings-stored-in-memory-01d29ec79844)
 - [Memory layout of a Rust program](https://shbhmrzd.github.io/2024/08/31/memory_layout_of_a_rust_program.html)
+- [Exploring Rust Fat Pointers](https://iandouglasscott.com/2018/05/28/exploring-rust-fat-pointers/)
+- [AArch64 Procedure Call Standard](https://medium.com/@tunacici7/aarch64-procedure-call-standard-aapcs64-abi-calling-conventions-machine-registers-a2c762540278) - ARM64 calling conventions
