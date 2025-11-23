@@ -4,33 +4,108 @@ We investigated how Rust's String type and &str type are handled at the assembly
 
 ## Investigation Results
 
-* String type
-  - The string body is placed on the heap. A structure is created on the stack that manages the String type string by holding the maximum number of characters that can be placed on the heap, a pointer to the string, and the current number of characters.
+### String Type (Heap-Allocated)
 
-* &str type
-  - The string body is placed in the .rdata section. A structure is created on the stack that manages the &str type string by holding a pointer to the string and the string length.
+The String type is heap-allocated, growable, and not null-terminated. It consists of three components stored on the stack:
 
-* Raw string literal, C string literal, binary string literal
-  - In the binary, there is no difference in handling compared to regular strings.
+1. **Pointer** - Points to the memory on the heap that holds the string contents
+2. **Capacity** - Maximum number of bytes that can be stored without reallocation
+3. **Length** - Current number of bytes actually used
 
-Additionally, even in 32-bit binaries and minimized binaries, no differences were observed in the structure or handling for managing strings, except for address size.
+On 64-bit systems, each field is 8 bytes (usize), making the total stack structure 24 bytes.
+
+**Key Characteristics:**
+- String data itself is on the heap
+- Metadata structure (ptr, capacity, length) is on the stack
+- Growable and mutable
+- Ownership and automatic deallocation through Drop trait
+
+### &str Type (String Slice)
+
+The &str type is a string slice that always points to valid UTF-8 sequence. The slice consists of:
+
+1. **Pointer** - Points to the first character of the string
+2. **Length** - Number of bytes in the string
+
+This creates a "fat pointer" structure on the stack (16 bytes on 64-bit systems).
+
+**Key Characteristics:**
+- Actual string data is NOT on the stack
+- Can point to various memory locations:
+  - `.rdata` or `.data` segment (for string literals)
+  - Heap memory (when slicing a String)
+  - Memory-mapped files
+  - Any valid UTF-8 byte sequence
+- Immutable view into string data
+- More efficient than String for read-only operations
+
+### String Literals
+
+String literals are known at compile time and stored in the read-only data section (`.rdata` or `.rodata`) of the executable. They:
+- Do not consume stack or heap space at runtime
+- Are embedded directly in the binary
+- Provide the most efficient string access
+- Are visible in the binary's read-only section (useful for reverse engineering)
+
+### Comparison Summary
+
+* **String type:** Heap-allocated, owning, mutable, growable
+* **&str type:** View/slice, immutable, can reference various memory locations
+* **String literals:** Compile-time, embedded in binary, read-only section
+
+Additionally, even in 32-bit binaries and minimized binaries, no differences were observed in the structure or handling for managing strings, except for address size (4 bytes instead of 8 bytes for pointers and size values).
 
 ## Details
 
-### String Layout
+### Detailed Memory Layout
 
-* String type
+#### String Type Structure
 
-According to Rust's official website, the String type is Vec<u8>.
+According to Rust's official documentation, the String type is internally Vec<u8>.
 As described in [Collections](17_collection.md), the Vec type is composed of a structure consisting of the maximum number of elements, an address to the buffer, and the current number of elements.
+
+**Stack Structure (64-bit):**
+```
+Offset 0x00: Pointer to heap buffer (8 bytes)
+Offset 0x08: Capacity in bytes (8 bytes)
+Offset 0x10: Length in bytes (8 bytes)
+Total: 24 bytes on stack
+```
+
+**Heap:** Contains the actual UTF-8 encoded string data
 
 ![strings](images/7-1.png)
 
-* &str type
+#### &str Type Structure
 
-A data structure consisting of a buffer to the string and the number of characters is constructed on the stack, and the &str type is managed with the following data structure.
+A data structure consisting of a pointer to the string and the length is constructed on the stack. This is a "fat pointer" or "slice" type.
+
+**Stack Structure (64-bit):**
+```
+Offset 0x00: Pointer to string data (8 bytes)
+Offset 0x08: Length in bytes (8 bytes)
+Total: 16 bytes on stack
+```
+
+**Data Location:** Varies based on source (see examples below)
 
 ![strings](images/7-2.png)
+
+#### Memory Location Examples
+
+```rust
+// 1. String literal - data in .rdata section
+let s1: &str = "hello";
+
+// 2. Slice of String - data on heap
+let s2: String = String::from("hello");
+let s3: &str = &s2[..];
+
+// 3. Static string - data in .data section
+static S4: &str = "world";
+```
+
+Each `&str` has the same stack structure (pointer + length), but the actual string data resides in different memory regions.
 
 ### Various String Literals
 
@@ -50,3 +125,23 @@ Embedded in the `.text` section.
 
 There is no difference in handling compared to regular strings.
 Defined in the `.rdata` section.
+
+## Reverse Engineering Implications
+
+When analyzing Rust binaries:
+
+1. **String Literals:** Look in `.rdata`/`.rodata` sections for embedded strings. These are directly visible and provide valuable context.
+
+2. **String Type Recognition:** Look for the 24-byte (64-bit) or 12-byte (32-bit) stack structure pattern with heap pointer references.
+
+3. **&str Type Recognition:** Look for the 16-byte (64-bit) or 8-byte (32-bit) fat pointer pattern.
+
+4. **Heap Allocations:** String heap allocations use the standard allocator (`__rust_alloc`), which ultimately calls system allocation functions like `HeapAlloc()` on Windows.
+
+5. **String Manipulation:** String operations that modify content require a String type (heap-allocated), while read-only operations can use &str slices efficiently.
+
+## References
+
+For more detailed information:
+- [Rust: How are Strings stored in memory?](https://medium.com/rustaceans/rust-how-are-strings-stored-in-memory-01d29ec79844)
+- [Memory layout of a Rust program](https://shbhmrzd.github.io/2024/08/31/memory_layout_of_a_rust_program.html)

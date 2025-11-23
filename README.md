@@ -60,6 +60,18 @@ This report summarizes the results of investigations on the following topics:
 | 22  | [repr attribute](22_repr_attribute.md)                                     | Investigation of how memory layout changes with available options                                       |
 | 23  | [Methods for identifying standard and third-party libraries](23_crates.md)     | Methods for identifying statically linked standard library and third-party library functions                                 |
 
+## Additional Resources
+
+For further reading on Rust binary reverse engineering:
+
+* **[CheckPoint Research: Rust Binary Analysis, Feature by Feature](https://research.checkpoint.com/2023/rust-binary-analysis-feature-by-feature/)** - Comprehensive analysis of Rust binary characteristics including monomorphization, vtables, and trait objects
+
+* **[Cindy Xiao's Blog: Panic Metadata in Rust Binaries](https://www.cxiao.net/posts/rust-re-panic-metadata/)** - Detailed exploration of extracting and utilizing panic metadata for reverse engineering
+
+* **[Rust: How are Strings stored in memory?](https://medium.com/rustaceans/rust-how-are-strings-stored-in-memory-01d29ec79844)** - In-depth analysis of String and &str memory layouts
+
+* **[Memory layout of a Rust program](https://shbhmrzd.github.io/2024/08/31/memory_layout_of_a_rust_program.html)** - Overview of Rust program memory organization
+
 ## Requests and Corrections
 
 If you have requests for additional investigations or find errors in this report, please contact us via Issue or Pull Request.
