@@ -1,27 +1,27 @@
-# link属性
+# link Attribute
 
-Rust の `link` 属性を用いることで、ライブラリのリンク方法を指定できる。本調査では、`dylib`、`static`、`raw-dylib` の各設定値を指定した場合に、アセンブリ上でどのような差異が生じるかを調査した。
+Using Rust's `link` attribute allows specifying library linking methods. In this investigation, we examined what differences occur in assembly when specifying each setting value: `dylib`, `static`, and `raw-dylib`.
 
-## 調査結果
+## Investigation Results
 
-呼び出し方や実装について通常関数との差異は確認できない。
+No differences were confirmed from normal functions in calling methods or implementation.
 
-## 詳細
+## Details
 
 ### static
 
-staticでリンクしたバイナリのadd()呼び出したものが以下である。
-ライブラリの関数が実行ファイルに埋め込まれており、呼び出し方や実装について通常関数との差異はない。
+The following shows calling add() in a binary linked with static.
+Library functions are embedded in the executable, and there are no differences from normal functions in calling methods or implementation.
 
 ![link_attribute](images/21-1.png)
 
 ### dylib
 
-Windowsでは動的リンクは`raw-dylib`のみ対応しているため、調査未実施。
+Not investigated because Windows only supports dynamic linking with `raw-dylib`.
 
 ### raw-dylib
 
-raw-dylibでリンクしたバイナリの`add()`呼び出したものが以下である。
-Windows APIの呼び出しと同じように、IATを用いた関数呼び出しになっている。
+The following shows calling `add()` in a binary linked with raw-dylib.
+Like calling Windows APIs, it becomes a function call using IAT.
 
 ![link_attribute](images/21-2.png)

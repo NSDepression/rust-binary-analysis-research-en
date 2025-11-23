@@ -1,43 +1,43 @@
-# 動的ディスパッチ参照
+# Dynamic Dispatch References
 
-トレイトオブジェクトを用いた動的ディスパッチ参照について、アセンブリ上の特徴を調査した。
+We investigated assembly characteristics of dynamic dispatch references using trait objects.
 
-## 調査結果
+## Investigation Results
 
-デバッグビルドのバイナリにおいては、VTable構造体を用いた関数呼び出し行われる。
-VTableの構造は下記のとおりである。
+In debug build binaries, function calls are made using a VTable structure.
+The VTable structure is as follows:
 
-* 64ビットバイナリ
-
-```c
-vtable {
-    0x00: デストラクター
-    0x08: 実装元構造体のサイズ
-    0x10: 実装元構造体のアラインメント
-    ..以降メソッドへのポインター..
-}
-```
-
-* 32ビットバイナリ
+* 64-bit binaries
 
 ```c
 vtable {
-    0x00: デストラクター
-    0x04: 実装元構造体のサイズ
-    0x08: 実装元構造体のアラインメント
-    ..以降メソッドへのポインター..
+    0x00: Destructor
+    0x08: Size of source structure
+    0x10: Alignment of source structure
+    ..followed by pointers to methods..
 }
 ```
 
-なお、リリースビルドおよび最小化バイナリにおいては、VTableが削除される（一般的な条件分岐に変換される）場合がある。
+* 32-bit binaries
 
-## 詳細
+```c
+vtable {
+    0x00: Destructor
+    0x04: Size of source structure
+    0x08: Alignment of source structure
+    ..followed by pointers to methods..
+}
+```
 
-デバッグビルドのバイナリでは、動的ディスパッチ参照によって関数呼び出しがVTable構造体による間接呼び出しとなる。
-以下は、IDA ProによってVTableと命名されたアドレスをスタックへ配置する処理である。
+Note that in release builds and minimized binaries, VTable may be removed (converted to general conditional branching).
+
+## Details
+
+In debug build binaries, function calls become indirect calls through the VTable structure due to dynamic dispatch references.
+The following is the processing that places the address named VTable by IDA Pro onto the stack.
 
 ![iterator](images/16-1.png)
 
-その後、VTableから値を取得する処理や、間接関数呼び出しが確認できる。それぞれ第一引数には構造体のアドレスを受け取る。
+Subsequently, processing to obtain values from VTable and indirect function calls can be confirmed. Each receives the address of the structure as the first argument.
 
 ![iterator](images/16-2.png)

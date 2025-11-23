@@ -1,38 +1,38 @@
-# 関数名のマングリング
+# Function Name Mangling
 
-マングリングされた関数名の構造およびデマングリング方法を明らかにすることを目的として調査した。
+We investigated the structure of mangled function names and demangling methods.
 
-## 調査結果
+## Investigation Results
 
-Rustにおけるシンボルマングリングには、`legacy`と`v0`の2つのバージョンが存在する。現在のデフォルトは`legacy`であり、このバージョンではマングリングされたシンボル名に、その関数が定義されたモジュールパスや型情報に基づくハッシュ値が含まれる。
+There are two versions of symbol mangling in Rust: `legacy` and `v0`. The current default is `legacy`, and in this version, the mangled symbol name includes the module path where the function is defined and a hash value based on type information.
 
-また、Rustのデマングリングツール[rustfilt](https://github.com/luser/rustfilt)を使用すると、`legacy`および`v0`の両バージョンのシンボルをデマングル可能である。
+Additionally, using the Rust demangling tool [rustfilt](https://github.com/luser/rustfilt), symbols of both `legacy` and `v0` versions can be demangled.
 
-## 詳細
+## Details
 
-### マングリングのバージョン
+### Mangling Versions
 
-Rustのシンボルマングリングには、`legacy`と`v0`バージョンの二つが存在しており、デフォルトは`legacy`バージョンである。
-`v0`バージョンは、[RFC2603](https://rust-lang.github.io/rfcs/2603-rust-symbol-name-mangling-v0.html)で提案されており、`symbol-mangling-version`オプションで指定することができる。
+There are two versions of Rust symbol mangling: `legacy` and `v0`, with `legacy` being the default version.
+The `v0` version is proposed in [RFC2603](https://rust-lang.github.io/rfcs/2603-rust-symbol-name-mangling-v0.html) and can be specified with the `symbol-mangling-version` option.
 
-### `legacy`バージョンでマングリングされたシンボルの構造
+### Structure of Symbols Mangled with `legacy` Version
 
-`legacy`バージョンで、マングリングされたシンボルの構造は以下のとおりである。
+The structure of symbols mangled with the `legacy` version is as follows:
 
 ![legacy-mangling](images/8-1.png)
 
-### `v0`バージョンでマングリングされたシンボルの構造
+### Structure of Symbols Mangled with `v0` Version
 
-`v0`バージョンで、マングリングされたシンボルの構造は以下のとおりである。
-`legacy`バージョンに対して、ジェネリックパラメーターの情報が失われていない点で異なる。
-`v0`バージョンの詳細は、[v0 Symbol Format](https://doc.rust-lang.org/stable/rustc/symbol-mangling/v0.html)に記載されている。
+The structure of symbols mangled with the `v0` version is as follows:
+It differs from the `legacy` version in that generic parameter information is not lost.
+Details of the `v0` version are described in [v0 Symbol Format](https://doc.rust-lang.org/stable/rustc/symbol-mangling/v0.html).
 
 ![v0-mangling](images/8-2.png)
 
-### デマングリング方法
+### Demangling Methods
 
-関数名のシンボルはマングリングされた状態で保持される。
-下記は関数 `fn test_add<T>(a: T, b: T) -> T where T: std::ops::Add<Output = T>`が`i32`で単相化されたシンボルである。
+Function name symbols are retained in a mangled state.
+The following is a symbol for the function `fn test_add<T>(a: T, b: T) -> T where T: std::ops::Add<Output = T>` monomorphized with `i32`.
 
 ```
 [legacy]
@@ -42,8 +42,8 @@ _ZN3no88test_add17he991e478e44b9c5fE
 _RINvCsg9W1Qrgvbiz_3no88test_addlEB2_
 ```
 
-上記のようにマングリングされたシンボルはバージョンにかかわらず、Rust Toolchainに含まれる`rustfilt`を用いることでデマングリングできる。
-`rustfilt`を用いて上記の関数名をデマングリングした例を下記に示す。
+Mangled symbols like the above can be demangled using `rustfilt` included in the Rust Toolchain, regardless of version.
+An example of demangling the above function name using `rustfilt` is shown below.
 
 ```
 PS> rustfilt '_ZN3no88test_add17he991e478e44b9c5fE'
@@ -54,9 +54,9 @@ no8::test_add::<i32>
 
 ```
 
-### 32ビットおよび最小化バイナリにおける差異
+### Differences in 32-bit and Minimized Binaries
 
-32ビットバイナリであってもマングリングされたシンボルの構造は同様である。
-しかし、同じ関数でも32ビットと64ビットの間でハッシュの部分に差異が発生した。
-これは関数の型情報がハッシュ値の作成に関係しているからであると考えられる。
-また、最小化バイナリではマングリングされたシンボルがpdbファイルに含まれない。
+The structure of mangled symbols is the same even for 32-bit binaries.
+However, for the same function, there are differences in the hash portion between 32-bit and 64-bit.
+This is considered to be because the function's type information is involved in creating the hash value.
+Additionally, in minimized binaries, mangled symbols are not included in the pdb file.

@@ -1,65 +1,65 @@
-# Rustで作成されたバイナリのリバースエンジニアリング調査
+# Reverse Engineering Research of Rust Binaries
 
-## はじめに
+## Introduction
 
-プログラミング言語Rust（以下、Rust）は、Mozillaにより開発されている言語であり、CやC++に代わる言語として注目されている。Rustはメモリ安全性と高速性に優れているため、近年採用が増加している。
+The Rust programming language (hereinafter referred to as Rust) is a language developed by Mozilla and is attracting attention as an alternative to C and C++. Rust excels in memory safety and performance, leading to increased adoption in recent years.
 
-一方で、Rustがプログラミング言語として普及するにつれ、SysJokerの亜種やBlackCatランサムウェアなど、Rustを利用して開発されたマルウェア（以下、Rustマルウェア）が増加する傾向にある。
+On the other hand, as Rust becomes more widespread as a programming language, there is a growing trend of malware developed using Rust (hereinafter referred to as Rust malware), such as variants of SysJoker and BlackCat ransomware.
 
-しかし、Rustマルウェアに対するリバースエンジニアリングの手法や知見は、他言語で作成されたマルウェアに比べるとまだ十分に蓄積されていないのが現状である。Rustなど新しい言語で作成されたバイナリは、従来のC言語などで作成されたバイナリと比較して異なる構造を持つことが多く、従来の分析手法とは異なるアプローチや知識が求められる。
+However, reverse engineering techniques and knowledge for Rust malware are not yet as well-established as those for malware written in other languages. Binaries created with newer languages like Rust often have different structures compared to binaries created with traditional languages like C, requiring different approaches and knowledge from conventional analysis methods.
 
-本レポートでは、Rustで作成されたバイナリ(以下、Rustバイナリ)のリバースエンジニアリングを行う上で必要となる知見について調査を実施し、その結果をまとめた。
+This report summarizes the results of our investigation into the knowledge required for reverse engineering binaries created with Rust (hereinafter referred to as Rust binaries).
 
 
-## 本レポートの想定読者
+## Target Audience
 
-本レポートは、以下のような技術者を想定読者としている。
+This report is intended for the following technical professionals:
 
-* マルウェアアナリスト
-* Rustバイナリのリバースエンジニアリングをする方
-* Rustの内部構造の理解を深めたい方
+* Malware analysts
+* Those who reverse engineer Rust binaries
+* Those who want to deepen their understanding of Rust's internal structure
 
-## 調査環境
+## Investigation Environment
 
-本調査で使用したrustcおよびcargoのバージョンを示す。また、コンパイルはWindows上でMSVC環境を使用した。
+This section shows the versions of rustc and cargo used in this investigation. Compilation was performed on Windows using the MSVC environment.
 
 * cargo: 1.82.0
 * rustc: 1.82.0
 
-バイナリのディスアセンブルにはIDA Proを利用した。本調査で使用したIDA Proのバージョンを以下に示す。
+IDA Pro was used for disassembling binaries. The version of IDA Pro used in this investigation is shown below.
 
 * IDA Pro v8.3.230608
 
-## 調査対象
+## Investigation Topics
 
-本レポートでは、以下の項目について調査した結果をまとめている。
+This report summarizes the results of investigations on the following topics:
 
-| No. | 項目                                       | 概要                                                                                               |
+| No. | Topic                                       | Overview                                                                                               |
 | --- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| 1   | [CargoのProfile設定の変更に伴うバイナリの差分](1_profile.md) | 公開情報から得られるcargoを用いたバイナリサイズ削減手法が、どの程度サイズ削減可能なのか、残留する情報はどのようなものか調査                                      |
-| 2   | [バイナリサイズ削減](2_minimize_binary.md)                           | 公開情報から得られるrustcを用いたバイナリサイズ削減手法が、どの程度サイズ削減可能なのか、残留する情報はどのようなものか調査 |
-| 3   | [Rustバイナリの識別](3_identify_rust_binary.md)                           | Rustバイナリか否かを識別する方法の調査                                                                     |
-| 4   | [Exception Directory](4_exception_directory.md)                          | Exception Directoryの構造から得られる情報の調査                                                                    |
-| 5   | [TLS Directory](5_tls_directory.md)                                | TLS Directoryの構造とTLS Callbackの内容から得られる情報の調査                                                           |
-| 6   | [main関数の特定と初期化処理](6_identify_main_function.md)                   | ユーザー定義のmain関数の特定方法                                                                         |
-| 7   | [文字列](7_strings.md)                                       | 文字列の取り扱い方法                                                                                     |
-| 8   | [関数名のマングリング](8_mangling.md)                         | マングリングされた関数名の構造およびデマングリング方法                                                   |
-| 9   | [クロージャ](9_closure.md)                                   | クロージャの動作や使用されるメモリレイアウト                                                             |
-| 10  | [列挙型](10_enum.md)                                       | Rustにおける列挙型の動作がアセンブリにてどのように実装されるかの調査                                           |
-| 11  | [match文](11_match.md)                                      | Rustにおけるmatch文の動作がアセンブリにてどのように実装されるかの調査                                        |
-| 12  | [Panic文](12_panic.md)                                      | パニック時の挙動であるunwindとabortのアセンブリの差分                                               |
-| 13  | [イテレータ](13_iterator.md)                                   | イテレータやnext関数を使用したコードがアセンブリにてどのように実装されるかの調査                               |                                                    |
-| 14  | [トレイト](14_trait.md)                                     | トレイトを実装した関数呼び出しと通常の関数呼び出しとの差異
-| 15  | [代表的なトレイトの識別](15_derive_attribute.md)                       | #\[derive\]属性で用いられるトレイトのアセンブリ上で識別方法                                          |
-| 16  | [動的ディスパッチ参照](16_dynamic_dispatch.md)                         | アセンブリの特徴および動的／静的ディスパッチを用いた呼び出しの差異                                       |
-| 17  | [コレクション](17_collection.md)                                 | 使用されるメモリレイアウト                                                                               |
-| 18  | [同一ジェネリクスから生成された関数の識別](18_generics_function.md)     | 生成元となった関数を特定方法の調査                                                               |
-| 19  | [スマートポインタ](19_smart_pointer.md)                             | スマートポインタの特徴やメモリレイアウト                                                                 |
-| 20  | [インラインアセンブリ](20_inline_assembly.md)                         | 特徴的なコードパターン                                                                                   |
-| 21  | [link属性](21_link_attribute.md)                                     | ライブラリのリンク方法の差異                                                                             |
-| 22  | [repr属性](22_repr_attribute.md)                                     | 指定可能なオプションにおいてメモリレイアウトがどのように変化するかの調査                                       |
-| 23  | [標準・サードパーティライブラリの判別方法](23_crates.md)     | 静的リンクされた標準ライブラリ・サードパーティライブラリ関数の識別の方法                                 |
+| 1   | [Binary differences from Cargo Profile setting changes](1_profile.md) | Investigation of how much size reduction is possible with binary size reduction techniques using cargo obtained from public information, and what information remains                                      |
+| 2   | [Binary size reduction](2_minimize_binary.md)                           | Investigation of how much size reduction is possible with binary size reduction techniques using rustc obtained from public information, and what information remains |
+| 3   | [Identifying Rust binaries](3_identify_rust_binary.md)                           | Investigation of methods to identify whether a binary is a Rust binary                                                                     |
+| 4   | [Exception Directory](4_exception_directory.md)                          | Investigation of information obtained from the Exception Directory structure                                                                    |
+| 5   | [TLS Directory](5_tls_directory.md)                                | Investigation of information obtained from the TLS Directory structure and TLS Callback contents                                                           |
+| 6   | [Identifying the main function and initialization process](6_identify_main_function.md)                   | Methods for identifying the user-defined main function                                                                         |
+| 7   | [Strings](7_strings.md)                                       | How strings are handled                                                                                     |
+| 8   | [Function name mangling](8_mangling.md)                         | Structure of mangled function names and demangling methods                                                   |
+| 9   | [Closures](9_closure.md)                                   | Closure behavior and memory layout used                                                             |
+| 10  | [Enums](10_enum.md)                                       | Investigation of how enum types in Rust are implemented in assembly                                           |
+| 11  | [Match expressions](11_match.md)                                      | Investigation of how match expressions in Rust are implemented in assembly                                        |
+| 12  | [Panic](12_panic.md)                                      | Assembly differences between unwind and abort behaviors during panic                                               |
+| 13  | [Iterators](13_iterator.md)                                   | Investigation of how code using iterators and next functions is implemented in assembly                               |
+| 14  | [Traits](14_trait.md)                                     | Differences between trait-based function calls and regular function calls |
+| 15  | [Identifying common traits](15_derive_attribute.md)                       | Methods for identifying traits used with the #\[derive\] attribute in assembly                                          |
+| 16  | [Dynamic dispatch references](16_dynamic_dispatch.md)                         | Assembly characteristics and differences between dynamic/static dispatch calls                                       |
+| 17  | [Collections](17_collection.md)                                 | Memory layout used                                                                               |
+| 18  | [Identifying functions generated from the same generic](18_generics_function.md)     | Investigation of methods to identify the source function                                                               |
+| 19  | [Smart pointers](19_smart_pointer.md)                             | Characteristics and memory layout of smart pointers                                                                 |
+| 20  | [Inline assembly](20_inline_assembly.md)                         | Characteristic code patterns                                                                                   |
+| 21  | [link attribute](21_link_attribute.md)                                     | Differences in library linking methods                                                                             |
+| 22  | [repr attribute](22_repr_attribute.md)                                     | Investigation of how memory layout changes with available options                                       |
+| 23  | [Methods for identifying standard and third-party libraries](23_crates.md)     | Methods for identifying statically linked standard library and third-party library functions                                 |
 
-## 要望・修正依頼
+## Requests and Corrections
 
-追加調査の要望や本レポートの間違い等がありましたら、IssueまたはPull Requestからご連絡ください。
+If you have requests for additional investigations or find errors in this report, please contact us via Issue or Pull Request.

@@ -1,53 +1,52 @@
-# 文字列
+# Strings
 
-RustのString型および&str型がアセンブリレベルでどのように扱われるのかを明らかにするために調査した。
+We investigated how Rust's String type and &str type are handled at the assembly level.
 
-## 調査結果
+## Investigation Results
 
-* String型
-  - 文字列本体はヒープに配置される。スタック上には、ヒープに配置可能な最大文字数、文字列へのポインター、現在の文字数を保持する構造体が生成され、String型の文字列を管理している。
+* String type
+  - The string body is placed on the heap. A structure is created on the stack that manages the String type string by holding the maximum number of characters that can be placed on the heap, a pointer to the string, and the current number of characters.
 
-* &str型
-  - 文字列本体は.rdataセクションに配置される。スタック上には、文字列へのポインターと文字列の長さを保持する構造体が生成され、&str型の文字列を管理している。
+* &str type
+  - The string body is placed in the .rdata section. A structure is created on the stack that manages the &str type string by holding a pointer to the string and the string length.
 
-* Raw string literal、C string literal、binary string literal
-  - バイナリ上において、通常の文字列との扱いに差異はない。
+* Raw string literal, C string literal, binary string literal
+  - In the binary, there is no difference in handling compared to regular strings.
 
-また、32ビットバイナリおよび最小化されたバイナリにおいても、アドレスのサイズ以外では、文字列を管理するための構造体や扱い方に差異は見られなかった。
+Additionally, even in 32-bit binaries and minimized binaries, no differences were observed in the structure or handling for managing strings, except for address size.
 
-## 詳細
+## Details
 
-### 文字列のレイアウト
+### String Layout
 
-* String型
+* String type
 
-Rustの公式サイトによるとString型はVec<u8>であると記載されている。
-[コレクション](17_collection.md)においても記述しているが、Vec型は最大要素数、バッファーへのアドレス、現在の要素数で構成される構造体により構成されている。
+According to Rust's official website, the String type is Vec<u8>.
+As described in [Collections](17_collection.md), the Vec type is composed of a structure consisting of the maximum number of elements, an address to the buffer, and the current number of elements.
 
 ![strings](images/7-1.png)
 
-* &str型
+* &str type
 
-スタックに文字列へのバッファーと文字数からなるデータ構造が構築されており、&str型は下記のようなデータ構造で管理される。
+A data structure consisting of a buffer to the string and the number of characters is constructed on the stack, and the &str type is managed with the following data structure.
 
 ![strings](images/7-2.png)
 
-### 各種string literal
+### Various String Literals
 
 * Raw string literal
 
-通常のプログラムでは`\n`が改行コードである0x0Aと変換されるはずであるが`r””`を使用した場合`\n`が`\`を示す0x5Cと`n`を示す0x6Eで表現されており、エスケープされていない状態でバイナリに埋め込まれる。
-それ以外の通常の文字列と扱い方に差異がない。
+In normal programs, `\n` should be converted to 0x0A (newline code), but when using `r""`, `\n` is represented as 0x5C (representing `\`) and 0x6E (representing `n`) and is embedded in the binary in an unescaped state.
+Otherwise, there is no difference in handling compared to regular strings.
 
 ![strings](images/7-3.png)
 
 * C string literal
 
-通常の文字列と扱い方に差異がない。
-`.text`セクションに埋め込まれる。
+There is no difference in handling compared to regular strings.
+Embedded in the `.text` section.
 
 * binary string literal
 
-通常の文字列と扱い方に差異がない。
-`.rdata`セクションへ定義される。
-
+There is no difference in handling compared to regular strings.
+Defined in the `.rdata` section.

@@ -1,11 +1,11 @@
 # Exception Directory
 
-`Exception Directory`について、Windowsの例外処理機構に準拠する構造となっているか否かを明確にすることを目的として調査した。
+We investigated the `Exception Directory` to clarify whether it conforms to the Windows exception handling mechanism.
 
-## 調査結果
+## Investigation Results
 
-調査の結果、RustバイナリであってもWindowsの例外処理機構に準拠していることを確認した。
+As a result of the investigation, we confirmed that even Rust binaries conform to the Windows exception handling mechanism.
 
-## 詳細
+## Details
 
-省略
+Omitted

@@ -1,54 +1,54 @@
-# 列挙型
+# Enums
 
-Rustにおける列挙型は、いくつかの異なる要素の型の中から一つを選択する場面で利用される。特に、Rustの列挙型は各要素に異なる型を柔軟に指定できる点が特徴的である。
+Rust's enum type is used when selecting one from several different element types. Particularly, Rust's enum type is characterized by its ability to flexibly specify different types for each element.
 
-本調査では、Rustの列挙型の中でも特に広く利用されている`Option`型について調査を行った。`Option`型は、値が存在する場合にはその値を返す`Some`、存在しない場合には`None`を返す列挙型である。この`Option`型がアセンブリレベルでどのように実装されているかを調査した。また、`Option`型に関連して使用可能な、`except()`や`unwrap()`などのパニックを引き起こす関数のアセンブリについても調査した。
+In this investigation, we examined the `Option` type, which is widely used among Rust's enum types. The `Option` type is an enum that returns `Some` with a value when a value exists, and returns `None` when it does not exist. We investigated how this `Option` type is implemented at the assembly level. We also investigated the assembly of panic-triggering functions such as `expect()` and `unwrap()` that can be used in relation to the `Option` type.
 
-## 調査結果
+## Investigation Results
 
-* `Option`型では、`Some`または`None`を示す判別値がeaxレジスタで返される。eaxが1の場合は`Some`、0の場合は`None`を示す。
-  - `Some`の場合、その値はedxレジスタで返される。
+* For the `Option` type, a discriminant value indicating `Some` or `None` is returned in the eax register. When eax is 1, it indicates `Some`; when 0, it indicates `None`.
+  - For `Some`, its value is returned in the edx register.
 
-なお、32ビットバイナリにおいても、引数の受け渡し方法やアドレスサイズを除いて実装は同様であることが確認できた。
+Note that we confirmed the implementation is the same for 32-bit binaries, except for argument passing methods and address sizes.
 
-## 詳細
+## Details
 
-調査に使用したサンプルプログラムは、[後半](#使用したサンプルプログラム)に記載している。
+The sample programs used for the investigation are described [later](#sample-programs-used).
 
-### Option型
+### Option Type
 
-リリースビルド、最小化バイナリでサンプルプログラムをビルドした場合、最適化によって無駄な処理が削除されるため、最適化の影響を受けないデバッグビルドのバイナリで調査した。
+When building the sample program with release build or minimized binary, optimization removes unnecessary processing, so we investigated with debug build binaries that are not affected by optimization.
 
-RustのOption型において、`Some`か`None`かはeaxレジスタで返され、1がSome、0がNoneを示す。
-Option型の関連する処理である戻り値をサンプルプログラムで確認すると、eaxレジスタへ1が、edxレジスタへ2が格納されている。
-edxレジスタに格納された2はサンプルプログラムで定義した配列の最初の偶数である。
-eaxレジスタの値が0か否かをチェックし、1の場合(Some)は、edxレジスタの値を出力し、0の場合(None)は文字列`No even number found`を出力する。
+In Rust's Option type, whether it is `Some` or `None` is returned in the eax register, with 1 indicating Some and 0 indicating None.
+When checking the return value of the Option type related processing in the sample program, 1 is stored in the eax register and 2 is stored in the edx register.
+The 2 stored in the edx register is the first even number of the array defined in the sample program.
+It checks whether the value of the eax register is 0, and if it is 1 (Some), it outputs the value of the edx register, and if it is 0 (None), it outputs the string `No even number found`.
 
 ![enum](images/10-1.png)
 
 ### expect()
 
-リリースビルド、最小化バイナリでサンプルプログラムをビルドした場合、最適化によって無駄な処理や`expect()`が削除されるため、最適化の影響を受けないデバッグビルドのバイナリで調査した。
+When building the sample program with release build or minimized binary, optimization removes unnecessary processing and `expect()`, so we investigated with debug build binaries that are not affected by optimization.
 
-`expect()`は、第一引数に`Some`か`None`かを示す値、第二引数にOption型の値、第三引数に`panic`メッセージ、第四引数にパニックメッセージの文字数、第五引数に`core::panic::Location`構造体を受け取る。
+`expect()` receives as the first argument a value indicating whether it is `Some` or `None`, as the second argument the Option type value, as the third argument the `panic` message, as the fourth argument the number of characters in the panic message, and as the fifth argument the `core::panic::Location` structure.
 
 ![enum](images/10-2.png)
 
-以下は、expect()の内部処理であるが、内部では`Some`か`None`かのチェックを行い、`Some`の場合は第二引数の値をそのまま返却し、`None`の場合はパニックを発生させる。
+The following is the internal processing of expect(), but internally it checks whether it is `Some` or `None`, and if it is `Some`, it returns the value of the second argument as is, and if it is `None`, it triggers a panic.
 
 ![enum](images/10-3.png)
 
 ### unwrap()
 
-リリースビルド、最小化バイナリでサンプルプログラムをビルドした場合、最適化によって無駄な処理や`unwrap()`が削除されるため、最適化の影響を受けないデバッグビルドのバイナリで調査した。
+When building the sample program with release build or minimized binary, optimization removes unnecessary processing and `unwrap()`, so we investigated with debug build binaries that are not affected by optimization.
 
-以下は、サンプルプログラムの結果であるが、`unwrap()`がインライン展開されていおり、処理からは`unwrap()`の使用が確認出来なくなった。
+The following is the result of the sample program, but `unwrap()` has been inline-expanded, and the use of `unwrap()` cannot be confirmed from the processing.
 
 ![enum](images/10-4.png)
 
-## 使用したサンプルプログラム
+## Sample Programs Used
 
-* Option型
+* Option type
 
 ```rust
 fn find_first_even_number(numbers: &[i32]) -> Option<i32> {
@@ -87,7 +87,7 @@ fn main() {
     let result = find_first_even_number(&numbers);
 
     let even_number = result.expect("No even number found");
-    
+
     println!("Even number: {}", even_number);
 }
 ```

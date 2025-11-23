@@ -1,246 +1,246 @@
-# コレクション
+# Collections
 
-Vec型、VecDeque型、HashMap型のメモリレイアウトやアセンブリ上の特徴を解析し、それぞれの構造や動作を明らかにすることを目的として調査した。
+We investigated the memory layout and assembly characteristics of Vec type, VecDeque type, and HashMap type, aiming to clarify their structure and behavior.
 
-## 調査結果
+## Investigation Results
 
-### Vec型のメモリレイアウト
+### Vec Type Memory Layout
 
-Vec型のメモリレイアウトを以下に記載する。
+The memory layout of the Vec type is described below.
 
 ![collection](images/13-1.png)
 
-### VecDeque型のメモリレイアウト
+### VecDeque Type Memory Layout
 
-VecDeque型のメモリレイアウトを以下に記載する。
+The memory layout of the VecDeque type is described below.
 
 ![collection](images/13-2.png)
 
-### HashMap型のメモリレイアウト
+### HashMap Type Memory Layout
 
-HashMap型のメモリレイアウトを以下に記載する。
+The memory layout of the HashMap type is described below.
 
 ![collection](images/17-1.png)
 
-### 管理構造体
+### Management Structures
 
-型は以下の構造体で管理されている。
-デバッグビルドの場合、`capacity()`や`len()`では、本構造体が参照される。
+Types are managed by the following structures.
+In debug builds, `capacity()` and `len()` refer to these structures.
 
-* Vec型
-
-```c
-stack {
-    offset + 0x00: 最大要素数, 
-    offset + 0x08: ヒープへのアドレス,
-    offset + 0x10: 現在の要素数,
-}
-```
-
-* VecDeque型
+* Vec type
 
 ```c
 stack {
-    offset + 0x00: 最大要素数, 
-    offset + 0x08: ヒープへのアドレス,
-    offset + 0x10: 先頭データのインデックス,
-    offset + 0x18: 現在の要素数,
+    offset + 0x00: Maximum number of elements,
+    offset + 0x08: Address to heap,
+    offset + 0x10: Current number of elements,
 }
 ```
 
-* HashMap型
+* VecDeque type
 
 ```c
 stack {
-    offset + 0x00: バケット（キーから生成されるハッシュ値が格納されているデータ構造）のアドレス, 
-    offset + 0x08: 最大要素数,
-    offset + 0x10: 空き要素数,
-    offset + 0x18: 現在の要素数,
-    offset + 0x20: 乱数,
+    offset + 0x00: Maximum number of elements,
+    offset + 0x08: Address to heap,
+    offset + 0x10: Index of first data,
+    offset + 0x18: Current number of elements,
 }
 ```
 
-## 詳細
+* HashMap type
 
-調査に使用したサンプルプログラムは、[後半](#使用したサンプルプログラム)に記載している。
+```c
+stack {
+    offset + 0x00: Address of bucket (data structure storing hash values generated from keys),
+    offset + 0x08: Maximum number of elements,
+    offset + 0x10: Number of free elements,
+    offset + 0x18: Current number of elements,
+    offset + 0x20: Random number,
+}
+```
 
-### Vec型
+## Details
 
-#### 型の生成
+The sample programs used for the investigation are described [later](#sample-programs-used).
 
-Vec型は以下のとおりヒープメモリに確保される。
+### Vec Type
+
+#### Type Creation
+
+The Vec type is allocated in heap memory as follows:
 
 ![collection](images/17-2.png)
 
-以下が、確保したヒープに対してデータを配置するコードである。
-同時に管理構造体の初期化も行われる。
+The following is the code that places data in the allocated heap.
+At the same time, the management structure is also initialized.
 
 ![collection](images/17-3.png)
 
-#### 要素の追加
+#### Element Addition
 
-以下は、`push()`とその前後の管理用構造体とバッファーを示している。
-リリースビルドでは最適化により`push()`がインライン展開されており、関数呼び出しとしては確認できないが、データの追加や、Vecの管理用構造体の更新が行われている。
+The following shows `push()` and the management structure and buffer before and after it.
+In release builds, `push()` is inline-expanded due to optimization and cannot be confirmed as a function call, but data addition and Vec management structure updates are performed.
 
-* push前の管理用構造体とバッファー
+* Management structure and buffer before push
 
 ![collection](images/17-4.png)
 
-* push後の管理用構造体とバッファー
+* Management structure and buffer after push
 
 ![collection](images/17-5.png)
 
-以下は、`insert()`およびその前後の管理用構造体とバッファーを示している。
-同様に、リリースビルドでは最適化の影響で`insert()`もインライン展開されているが、挿入位置以降のデータを後方に移動し、新しいデータを挿入する処理が行われる。
-しかし、最適化の影響で管理用構造体における現在の要素数が更新されていない。一方、デバッグビルドでは管理用構造体の更新も行われていた。
+The following shows `insert()` and the management structure and buffer before and after it.
+Similarly, in release builds, `insert()` is also inline-expanded due to optimization, but processing is performed to move data after the insertion position backward and insert new data.
+However, due to optimization, the current number of elements in the management structure has not been updated. On the other hand, in debug builds, the management structure was also updated.
 
-* insert前の管理用構造体とバッファー
+* Management structure and buffer before insert
 
 ![collection](images/17-6.png)
 
-* insert後の管理用構造体とバッファー
+* Management structure and buffer after insert
 
 ![collection](images/17-7.png)
 
-### VecDeque型
+### VecDeque Type
 
-#### 型の生成
+#### Type Creation
 
-VecDeque型は以下のとおりバッファーの確保を行った後、そのメモリに対してデータを配置する。
-最後に、スタックに管理用構造体を構築する。
+The VecDeque type allocates a buffer as follows, then places data in that memory.
+Finally, it constructs the management structure on the stack.
 
 ![collection](images/17-8.png)
 
-#### 要素の追加
+#### Element Addition
 
-VecDeque型は循環バッファーとして設計されている。
-以下は、`push_front()`を用いたデータ挿入時のメモリ上の配置の例である（サンプルプログラム参照）。
-リリースビルドでは最適化の影響で`push_front()`がインライン展開されており、関数呼び出しを確認できなかったが、データの追加やVecDequeの管理用構造体の更新が行われる。
+The VecDeque type is designed as a circular buffer.
+The following is an example of memory placement during data insertion using `push_front()` (see sample program).
+In release builds, `push_front()` is inline-expanded due to optimization and function calls could not be confirmed, but data addition and VecDeque management structure updates are performed.
 
-* push_front前の管理用構造体とバッファー
+* Management structure and buffer before push_front
 
 ![collection](images/17-9.png)
 
-* push_front後の管理用構造体とバッファー
+* Management structure and buffer after push_front
 
 ![collection](images/17-10.png)
 
-`push_front()`の実行によりバッファーには、既存データの末尾にデータが追加される。
-この挙動はVecDequeの循環バッファーの特性によるものと考えられ、管理用構造体は、データ挿入後、現在の要素数がインクリメントされる。
-また、データ挿入前は先頭データが2であったため、管理用構造体における先頭データのインデックスは`0`である。
-挿入後は`push_front()`によって2の前方に1が追加されるため先頭データは1となり、管理用構造体における先頭データのインデックスは、データが最後尾に追加されることで`5`となる。
+By executing `push_front()`, data is added to the end of existing data in the buffer.
+This behavior is considered to be due to the circular buffer characteristics of VecDeque, and the management structure increments the current number of elements after data insertion.
+Also, since the first data was 2 before data insertion, the index of the first data in the management structure is `0`.
+After insertion, since 1 is added before 2 by `push_front()`, the first data becomes 1, and the index of the first data in the management structure becomes `5` as data is added to the end.
 
-### HashMap型
+### HashMap Type
 
-#### 型の生成
+#### Type Creation
 
-以下は、`HashMap::new()`によるHashMapの作成処理を示すアセンブリである。
-最適化の影響で`HashMap::new()`の呼び出しは確認できないが、HashMapの管理用構造体を作成する処理が確認できる。
-Windows APIの`ProcessPrng()`を用いて16バイトの乱数を取得する。
-この乱数は8バイトずつ扱われ、HashMapは入力されたキーからハッシュ値を生成し、キーおよび値と紐づけて管理している。
-この乱数は、キーからハッシュ値を生成する際に使用される。その後、スタックにHashMapの管理用構造体が構築される。
-Rustでは、`v1.35`以降のバージョンで、HashMapのアルゴリズムとして`SwissTable`が使用されており、またHash関数として`SipHash`が使用されている。
+The following is the assembly showing the HashMap creation process by `HashMap::new()`.
+Although the call to `HashMap::new()` cannot be confirmed due to optimization, processing to create the HashMap management structure can be confirmed.
+A 16-byte random number is obtained using the Windows API `ProcessPrng()`.
+This random number is handled in 8-byte chunks, and HashMap generates a hash value from the input key and manages it in association with the key and value.
+This random number is used when generating a hash value from a key. Then, the HashMap management structure is constructed on the stack.
+In Rust, since version `v1.35`, `SwissTable` is used as the HashMap algorithm, and `SipHash` is used as the hash function.
 
 ![collection](images/17-11.png)
 
-#### 要素の追加
+#### Element Addition
 
-HashMap型の要素追加である`insert()`は、アセンブリ内では第一引数に管理用構造体、第二引数にキー、第三引数に値を受け取る。
-その後、以下の流れで、値の追加を行う。
+The element addition for HashMap type, `insert()`, receives the management structure as the first argument, the key as the second argument, and the value as the third argument in assembly.
+Then, value addition is performed in the following flow:
 
-* 1. ハッシュ値の生成
+* 1. Hash Value Generation
 
-標準ライブラリ関数`core::hash::BuildHasher::hash_one()`でキーと管理用構造体の乱数をもとにハッシュ値を生成。
-このハッシュ値はキーおよび値と紐づく識別子の生成やバケット内に識別子が配置されるインデックスの生成に使用される。
+The standard library function `core::hash::BuildHasher::hash_one()` generates a hash value based on the key and the random number in the management structure.
+This hash value is used to generate an identifier associated with the key and value, and to generate the index where the identifier is placed in the bucket.
 
-* 2. 識別子の生成と重複確認
+* 2. Identifier Generation and Duplication Check
 
-ハッシュ値の生成後、次に識別子の生成および重複確認を行う。
-生成したハッシュ値を右に`0x39`ビットシフトすることで、上位7ビットを抽出する。
-この値は、キーと値に紐づく識別子としてバケットに配置される。
-識別子の特徴として、上位7ビットを抜き出し、その値を1バイトの数値として扱うため、識別子の上位1ビットは必ず0になる。
-この特性は、バケット内にすでに識別子が存在するかどうかを判別する際に利用される。
+After generating the hash value, identifier generation and duplication check are performed.
+By right-shifting the generated hash value by `0x39` bits, the upper 7 bits are extracted.
+This value is placed in the bucket as an identifier associated with the key and value.
+As a characteristic of the identifier, since the upper 7 bits are extracted and that value is treated as a 1-byte number, the upper 1 bit of the identifier is always 0.
+This property is used when determining whether an identifier already exists in the bucket.
 
-その後、識別子の重複確認を行う。
-ハッシュ値と最大要素数の論理積を計算し、その結果をオフセットとし、バケットから16バイト分の値を取得する。
-`pcmpeqb`命令を用いて、バケットから取得した16バイトの値の中に識別子がすでに存在しているかどうかをチェックする。
-`pcmpeqb`命令は16バイトを1バイトずつ比較し、一致したバイト列があれば第一オペランドの同じ位置に`0xFF`を配置する。
-一致しない箇所は`0x00`が配置される。
-命令実行後の第一オペランドが`0x00`で埋まっていれば、識別子は重複していないといえる。
+Then, identifier duplication check is performed.
+The logical AND of the hash value and the maximum number of elements is calculated, and using that result as an offset, a 16-byte value is obtained from the bucket.
+Using the `pcmpeqb` instruction, it checks whether the identifier already exists in the 16-byte value obtained from the bucket.
+The `pcmpeqb` instruction compares 16 bytes byte by byte, and if there is a matching byte sequence, it places `0xFF` at the same position in the first operand.
+`0x00` is placed where there is no match.
+If the first operand after instruction execution is filled with `0x00`, it can be said that the identifier is not duplicated.
 
 ![collection](images/17-12.png)
 
-* 3. インデックスの生成
+* 3. Index Generation
 
-識別子の生成後、識別子がバケット内のどこに配置されるかを示すインデックスを生成する。
-`pmovmskb`命令を使用して、「2. 識別子の生成と重複確認」でバケットから取得した16バイトのデータをもとにマスクを生成する。
-`pmovmskb`命令は、第二オペランドに指定した16バイトのレジスタ内の各バイトの最上位ビットを抽出し、ビット列として第一オペランドに集約する。
-バケット内の未使用領域は`0xFF`で埋められており、最上位ビットは1になる。
-前項で説明したとおり、識別子の最上位ビットは必ず0となるため、`pmovmskb`命令で集約されたビット列では、識別子が配置されている部分のビットは0になり、未配置の部分のビットは1となる。
-続いて、このマスクに対して`tzcnt`命令を実行する。
-`tzcnt`命令は、第二オペランドに指定した値の下位ビットから最初に1が現れるまでの連続する0の数をカウントし、その結果を第一オペランドに格納する。
-この処理により、バケット内の下位からいくつの領域がすでに埋まっているかを算出できる。
-さらに、`tzcnt命令`で算出したカウントに、前項でも使用したハッシュ値と最大要素数の論理積の結果を加算する。
-この加算により、識別子が配置されるべきインデックスの候補が求められる。
-最後に、この加算結果と最大要素数の論理積をとることで、インデックスが最大要素数内に収まるように調整する。
-この最終的な値が識別子の配置先インデックスとして使用される。
+After generating the identifier, generate an index indicating where the identifier is placed in the bucket.
+Using the `pmovmskb` instruction, generate a mask based on the 16-byte data obtained from the bucket in "2. Identifier Generation and Duplication Check".
+The `pmovmskb` instruction extracts the most significant bit of each byte in the 16-byte register specified in the second operand and aggregates it as a bit string in the first operand.
+Unused areas in the bucket are filled with `0xFF`, and the most significant bit is 1.
+As explained in the previous section, the most significant bit of the identifier is always 0, so in the bit string aggregated by the `pmovmskb` instruction, the bit where the identifier is placed becomes 0, and the bit of the unplaced part becomes 1.
+Next, execute the `tzcnt` instruction on this mask.
+The `tzcnt` instruction counts the number of consecutive 0s from the lower bits of the value specified in the second operand until the first 1 appears, and stores the result in the first operand.
+Through this processing, it is possible to calculate how many areas from the lower part of the bucket are already filled.
+Furthermore, add the result of the logical AND of the hash value and the maximum number of elements used in the previous section to the count calculated by the `tzcnt` instruction.
+By this addition, a candidate for the index where the identifier should be placed is obtained.
+Finally, by taking the logical AND of this addition result and the maximum number of elements, adjust so that the index fits within the maximum number of elements.
+This final value is used as the placement index for the identifier.
 
 ![collection](images/17-13.png)
 
-* 4. 管理用構造体、バケット、バッファーの更新
+* 4. Management Structure, Bucket, and Buffer Updates
 
-最後に、管理用構造体、バケット、およびバッファー（キーと値の格納場所）の更新を行う。
-要素の追加の場合は、管理用構造体の要素数が増加、空き要素数の減少などが行われる。
+Finally, update the management structure, bucket, and buffer (storage location for keys and values).
+In the case of element addition, the number of elements in the management structure increases, the number of free elements decreases, etc.
 
 
-## 使用したサンプルプログラム
+## Sample Programs Used
 
-* Vec型
+* Vec type
 
 ```rust
 fn main() {
-    // 1. Vecの作成
+    // 1. Create Vec
     let mut vec_num = vec![1, 2, 3, 4, 5];
-    
-    // 2. Vecの長さと容量
-    println!("vec_numの長さ: {}, 容量: {}", vec_num.len(), vec_num.capacity());
 
-    // 3. 要素の追加
+    // 2. Vec length and capacity
+    println!("vec_num length: {}, capacity: {}", vec_num.len(), vec_num.capacity());
+
+    // 3. Add element
     vec_num.push(6);
-    println!("vec_numの長さ: {}, 容量: {}", vec_num.len(), vec_num.capacity());
+    println!("vec_num length: {}, capacity: {}", vec_num.len(), vec_num.capacity());
 
     vec_num.insert(3, 99);
 
-    // 4. イテレーション
-    // vec_numを奇数のみのVecにする
+    // 4. Iteration
+    // Make vec_num a Vec of only odd numbers
     let odd_numbers: Vec<i32> = vec_num.iter()
         .filter(|&num| num % 2 != 0)
         .cloned()
         .collect();
-    
-    println!("odd_numbersの要素:");
+
+    println!("odd_numbers elements:");
     for value in &odd_numbers {
         println!("{}", value);
     }
 }
 ```
 
-* VecDeque型
+* VecDeque type
 
 ```rust
 use std::collections::VecDeque;
 
 fn main() {
-    // 1. VecDequeの作成
+    // 1. Create VecDeque
     let mut vec_num = VecDeque::from([2, 3, 4]);
     let vec_iter_test = VecDeque::from([0, 1, 2]);
 
     let it = vec_num.iter();
 
-    // 2. VecDequeの長さと容量
-    println!("vec_numの長さ: {}, 容量: {}", vec_num.len(), vec_num.capacity());
+    // 2. VecDeque length and capacity
+    println!("vec_num length: {}, capacity: {}", vec_num.len(), vec_num.capacity());
 
-    // 3. 要素の追加
+    // 3. Add elements
     vec_num.push_front(1);
     vec_num.push_front(0);
     vec_num.push_back(5);
@@ -255,73 +255,73 @@ fn main() {
     let num = vec_num[3];
     println!("{}", num);
 
-    // 4. 要素の削除
+    // 4. Remove element
     vec_num.pop_front();
     // vec_num.pop_back();
 
-    // 5. イテレータトレイト
+    // 5. Iterator trait
     let numbers: VecDeque<i32> = vec_num.iter()
         .filter(|&&num| num % 2 != 0)
         .map(|&num| num * 2)
         .collect();
-    
-    println!("numbersの要素:");
+
+    println!("numbers elements:");
     for value in &numbers {
         println!("{}", value);
     }
-    
+
     let numbers: VecDeque<i32> = vec_iter_test.iter()
         .filter(|&&num| num % 2 != 0)
         .map(|&num| num * 2)
         .collect();
 
-    println!("numbersの要素:");
+    println!("numbers elements:");
     for value in &numbers {
         println!("{}", value);
     }
 }
 ```
 
-* HashMap型
+* HashMap type
 
 ```rust
 use std::collections::HashMap;
 
 fn main() {
-    // HashMapの作成
+    // Create HashMap
     let mut processes = HashMap::new();
 
-    // 要素の追加
+    // Add elements
     processes.insert("ProcessA", 1001);
     processes.insert("ProcessB", 1002);
     processes.insert("ProcessC", 1003);
 
-    // 容量と要素数の取得
-    println!("processesの長さ: {}, 容量: {}", processes.len(), processes.capacity());
+    // Get capacity and number of elements
+    println!("processes length: {}, capacity: {}", processes.len(), processes.capacity());
 
-    // 容量を超えるデータの追加
+    // Add data exceeding capacity
     processes.insert("ProcessD", 1004);
 
-    println!("processesの長さ: {}, 容量: {}", processes.len(), processes.capacity());
+    println!("processes length: {}, capacity: {}", processes.len(), processes.capacity());
 
-    // 存在する要素の取得
+    // Get existing element
     let pid = processes.get("ProcessB");
     match pid {
         Some(&id) => println!("PID of ProcessA.exe: {}", id),
         None => println!("ProcessA.exe not found"),
     }
 
-    // 存在しない要素の取得
+    // Get non-existent element
     let pid = processes.get("ProcessE");
     match pid {
         Some(&id) => println!("PID of ProcessD.exe: {}", id),
         None => println!("ProcessD.exe not found"),
     }
 
-    // 存在するデータの削除
+    // Remove existing data
     processes.remove("ProcessA");
-    
-    // 存在しないデータの削除
+
+    // Remove non-existent data
     processes.remove("ProcessE");
 }
 ```

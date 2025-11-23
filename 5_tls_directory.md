@@ -1,17 +1,16 @@
 # TLS Directory
 
-`TLS Directory`について、Microsoftが定める`TLS Directory`に準拠する構造となっているか否か、またデフォルトで存在している`TLS Callback`の処理内容を
-明確にすることを目的として調査した。
+We investigated the `TLS Directory` to clarify whether it conforms to the `TLS Directory` structure defined by Microsoft, and the processing content of the `TLS Callback` that exists by default.
 
-## 調査結果
+## Investigation Results
 
-調査の結果、Rust製バイナリであってもMicrosoftが定める`TLS Directory`の構造と一致していることが判明した。
-なお、`TLS Directory`の構造は公式サイトで説明されている。
+As a result of the investigation, we found that even Rust binaries match the `TLS Directory` structure defined by Microsoft.
+The structure of the `TLS Directory` is explained on the official website.
 
 https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#the-tls-section
 
-加えて、デフォルトで存在している`TLS Callback`はスレッドまたはプロセスのデタッチ時にTLS変数のドロップ等のクリーンアップ処理を実行するために存在している。
+Additionally, the `TLS Callback` that exists by default is present to execute cleanup processing such as dropping TLS variables when threads or processes are detached.
 
-## 詳細
+## Details
 
-省略
+Omitted

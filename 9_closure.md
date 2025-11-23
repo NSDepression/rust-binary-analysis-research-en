@@ -1,79 +1,79 @@
-# クロージャ
+# Closures
 
-クロージャの動作や使用されるメモリレイアウトを明らかにすることを目的として調査した。
+We investigated closure behavior and the memory layout used.
 
-## 調査結果
+## Investigation Results
 
-* クロージャは暗黙的に第一引数として、キャプチャする変数のアドレスを格納したスタック領域のアドレス（以降、`closure_env`と呼称する）を受け取る。変数をキャプチャしない場合でも、第一引数は`closure_env`となる。
+* Closures implicitly receive as their first argument the address of a stack region that stores the addresses of variables to be captured (hereinafter referred to as `closure_env`). Even when no variables are captured, the first argument is `closure_env`.
 
-* クロージャをキャプチャするクロージャでは、キャプチャ対象である子クロージャのアドレスは親の`closure_env`を経由せず、親クロージャの内部で直接参照される。
+* In closures that capture closures, the address of the child closure being captured is not referenced through the parent's `closure_env`, but is directly referenced inside the parent closure.
 
-* ただし、子クロージャがキャプチャする変数は、親の`closure_env`内に子の`closure_env`が組み込まれる形で構造化される。
+* However, variables captured by child closures are structured such that the child's `closure_env` is embedded within the parent's `closure_env`.
 
-## 詳細
+## Details
 
-調査に使用したサンプルプログラムは、[後半](#使用したサンプルプログラム)に記載している。
+The sample programs used for the investigation are described [later](#sample-programs-used).
 
-### 基本的なクロージャ
+### Basic Closure
 
-サンプルプログラムをリリースビルドしたところ、以下の図のとおり最適化によって`sum()`の戻り値である15がバイナリに埋め込まれた。
-このことから、単純なクロージャは最適化によって識別できない。
+When the sample program was release built, as shown in the figure below, the return value of `sum()`, which is 15, was embedded in the binary due to optimization.
+From this, simple closures cannot be identified due to optimization.
 
 ![closure](images/9-1.png)
 
-最適化を避けるためサンプルプログラムをデバッグビルドした結果(関数sum)が、以下の図である。
-64ビットバイナリでは通常、第一引数はrcxレジスタ、第二引数はrdxレジスタ、第三引数はr8レジスタへ格納されるが、上記の関数の引数を確認すると明示的引数である5と10は第二引数と第三引数として渡されている。
+To avoid optimization, the result of debug building the sample program (function sum) is shown in the figure below.
+In 64-bit binaries, normally the first argument is stored in the rcx register, the second argument in the rdx register, and the third argument in the r8 register, but when checking the arguments of the above function, the explicit arguments 5 and 10 are passed as the second and third arguments.
 
 ![closure](images/9-2.png)
 
-第一引数を格納するrcxレジスタには、IDA Proによって`arguments::main::closure_env$0 *`と命名されたスタックのアドレスが格納されている。
-クロージャの第一引数に渡されるスタックのアドレスにはクロージャがキャプチャした変数のアドレス`closure_env`が格納されるが、本サンプルプログラムでは変数をキャプチャしないクロージャであるため、クロージャの第一引数に渡されるアドレスは未使用となる。
+The rcx register, which stores the first argument, contains the address of the stack named `arguments::main::closure_env$0 *` by IDA Pro.
+The address of the stack passed to the first argument of a closure stores the address of variables captured by the closure, `closure_env`, but since this sample program is a closure that does not capture variables, the address passed to the first argument of the closure is unused.
 
-### 変数をキャプチャするクロージャ
+### Closure That Captures Variables
 
-前項と同様にクロージャは最適化によって識別不可となるため、デバッグビルドにて調査した。
-以下の図が、サンプルプログラムにおける、デバッグビルド時の`add_to_x()`の呼び出し箇所である。
-ローカル変数xの値である`0x0A(10)`を`var_D4`へ格納している。
-その後、`var_D4`のアドレスが`closure_env`を示す`var_D0`へ格納されている。
-このように、クロージャの第一引数に渡されるスタックのアドレスにはクロージャがキャプチャした変数のアドレスが格納される。
+Similar to the previous section, closures become unidentifiable due to optimization, so we investigated with debug builds.
+The figure below shows the call site of `add_to_x()` during debug build in the sample program.
+The value `0x0A(10)` of local variable x is stored in `var_D4`.
+Subsequently, the address of `var_D4` is stored in `var_D0`, which indicates `closure_env`.
+In this way, the address of the stack passed to the first argument of a closure stores the addresses of variables captured by the closure.
 
 ![closure](images/9-3.png)
 
-クロージャの`_ZN7capture4main28_$u7b$$u7b$closure$u7d$$u7d$17he4cd0740b21072e5E()`の内部では、`closure_env`から取り出した値を明示的引数である5と加算しており、この処理は`add_to_x()`の処理と一致している。
+Inside the closure `_ZN7capture4main28_$u7b$$u7b$closure$u7d$$u7d$17he4cd0740b21072e5E()`, the value extracted from `closure_env` is added to the explicit argument 5, and this processing matches the processing of `add_to_x()`.
 
 ![closure](images/9-4.png)
 
-### クロージャをキャプチャするクロージャ
+### Closure That Captures Closures
 
-前項と同様にクロージャは最適化によって識別不可となるため、デバッグビルドにて調査した。
-以下は、サンプルプログラムにおける、デバッグビルド時の`double()`の呼び出し箇所である。
- 
+Similar to the previous section, closures become unidentifiable due to optimization, so we investigated with debug builds.
+The following shows the call site of `double()` during debug build in the sample program.
+
 ![closure](images/9-5.png)
 
-`_ZN15capture_closure4main28_$u7b$$u7b$closure$u7d$$u7d$17hc3f3366177092b36E()`が`double()`である。
-`closure_env`には、ユーザー入力文字列、`add_one()`および`sub_one()`の`closure_env`が格納されている。
-本サンプルプログラムでの`closure_env`の構造を以下に記載する。
+`_ZN15capture_closure4main28_$u7b$$u7b$closure$u7d$$u7d$17hc3f3366177092b36E()` is `double()`.
+`closure_env` stores the user input string, and the `closure_env` of `add_one()` and `sub_one()`.
+The structure of `closure_env` in this sample program is described below.
 
 ```
 closure_env {
-   0x00: ユーザー入力文字列
-   0x08: add_one()のclosure_env
-   0x10: sub_one()のclosure_env
+   0x00: User input string
+   0x08: closure_env of add_one()
+   0x10: closure_env of sub_one()
 }
 ```
 
-以下は、`add_one()`を呼び出すところであるが、第一引数に`closure_env + 0x08`を与えており、上記の構造体のアドレスを`closure_env`として使用していることがわかる。
+The following is where `add_one()` is called, and it gives `closure_env + 0x08` as the first argument, showing that the address of the above structure is used as `closure_env`.
 
 ![closure](images/9-6.png)
 
-### 32ビットおよび最小化バイナリにおける差異
+### Differences in 32-bit and Minimized Binaries
 
-32ビットバイナリにおいては、引数の受け渡し方法とアドレスのバイト数を除けば、すべてのサンプルにおいて同様である。
-また、最小化バイナリにおいては、最適化の影響ですべてのサンプルにおいてクロージャはインライン展開され、単純な計算結果はバイナリに埋め込まれる。
+In 32-bit binaries, it is the same for all samples except for the argument passing method and the number of bytes in addresses.
+Also, in minimized binaries, due to optimization effects, closures are inline-expanded in all samples, and simple calculation results are embedded in the binary.
 
-## 使用したサンプルプログラム
+## Sample Programs Used
 
-* 基本的なクロージャ
+* Basic closure
 
 ```rust
 fn main() {
@@ -85,7 +85,7 @@ fn main() {
 }
 ```
 
-* 変数をキャプチャするクロージャ
+* Closure that captures variables
 
 ```rust
 fn main() {
@@ -99,7 +99,7 @@ fn main() {
 }
 ```
 
-* クロージャをキャプチャするクロージャ
+* Closure that captures closures
 
 ```rust
 use std::env;

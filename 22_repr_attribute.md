@@ -1,53 +1,53 @@
-# repr属性
+# repr Attribute
 
-`repr` 属性は、構造体などのメモリレイアウトを制御するために使用できる。本調査では、指定可能な各オプションがメモリレイアウトにどのような影響を与えるかを調査した。
+The `repr` attribute can be used to control the memory layout of structures and other types. In this investigation, we examined how each available option affects memory layout.
 
-## 調査結果
+## Investigation Results
 
-構造体のメモリレイアウトは以下のとおりである。
+The memory layout of structures is as follows:
 
 * **`#[repr(Rust)]`**
-  - ソースコード上の定義順に関係なく、サイズが大きいフィールドから順にメモリへ配置される（アラインメントあり）。
+  - Regardless of the definition order in the source code, fields are placed in memory in descending order of size (with alignment).
 
 * **`#[repr(C)]`**
-  - C/C++ と互換性のあるメモリレイアウトとなり、ソースコードでの定義順にメモリ上へ配置される（アラインメントあり）。
+  - Memory layout is compatible with C/C++, and fields are placed in memory in the order defined in the source code (with alignment).
 
 * **`#[repr(packed(1))]`**
-  - メモリアラインメントを指定するオプションであり、ソースコードでの定義順にメモリへ配置される（アラインメントなし）。
+  - An option to specify memory alignment, and fields are placed in memory in the order defined in the source code (without alignment).
 
-## 詳細
+## Details
 
 ### \#\[repr(Rust)\]
 
-`#[repr(Rust)]`は明示的に属性を指定しなかった場合のデフォルトであるが、サンプルコードの場合、構造体のメモリレイアウトは以下のようになる。
-アラインメントの影響でi8型である変数yにも2バイトのメモリが割り当てられており、合計が32バイトとなっている。
-また、ソースコード上の定義順に関わらずサイズが大きい変数からメモリに配置される。
-同じバイト数の変数はソースコード上の定義順にメモリに配置される。
+`#[repr(Rust)]` is the default when no attribute is explicitly specified, but in the case of the sample code, the memory layout of the structure is as follows:
+Due to alignment, 2 bytes of memory are allocated even to variable y which is of type i8, totaling 32 bytes.
+Also, regardless of the definition order in the source code, variables with larger sizes are placed in memory first.
+Variables with the same number of bytes are placed in memory in the order defined in the source code.
 
 ![repr_attribute](images/22-1.png)
 
 ### \#\[repr(C)\]
 
-`#[repr(C)]`を指定した場合、C/C++言語と互換性のあるメモリレイアウトとなる。
-サンプルコードの場合、構造体のメモリレイアウトは以下のとおりである。
-ソースコードでの定義順と、メモリ上での配置が一致しており、また`#[repr(Rust)]`と同様、アラインメントの影響でi8型である変数yにも2バイトのメモリが割り当てられて、合計が32バイトとなる。
-なお、空いているメモリは`0x00`で初期化されず、もともと配置されていたランダムなデータ(`0x72`)がそのまま残っている。
-また、32ビットバイナリでは、nameの管理用構造体が4バイトで扱われるため、構造体のバイト数に差異が生じるが、メモリ配置に差異はない。
-最小化バイナリにおいても構造体のバイト数およびメモリ配置に差異はない。
+When `#[repr(C)]` is specified, the memory layout is compatible with C/C++ language.
+In the case of the sample code, the memory layout of the structure is as follows:
+The definition order in the source code matches the placement in memory, and like `#[repr(Rust)]`, due to alignment, 2 bytes of memory are allocated even to variable y which is of type i8, totaling 32 bytes.
+Note that empty memory is not initialized with `0x00`, and the random data (`0x72`) that was originally placed remains as is.
+Also, in 32-bit binaries, the name management structure is handled with 4 bytes, causing differences in structure byte count, but there are no differences in memory placement.
+There are also no differences in structure byte count and memory placement in minimized binaries.
 
 ![repr_attribute](images/22-2.png)
 
 ### \#\[repr(packed(1))\]
 
-`#[repr(packed(1))]`はメモリのアラインメントを指定することができるオプションである。
-サンプルコードの場合、構造体のメモリレイアウトは以下のとおりである。
-RustやC言語とは異なり、i8型である変数yには1バイトのメモリが割り当てられており、合計サイズは7バイトとなった。
-また、C言語と同様、ソースコードでの定義順とメモリ上での配置が一致している。
-なお、32ビットバイナリおよび最小化バイナリにて差異はない。
- 
+`#[repr(packed(1))]` is an option that can specify memory alignment.
+In the case of the sample code, the memory layout of the structure is as follows:
+Unlike Rust or C language, 1 byte of memory is allocated to variable y which is of type i8, totaling 7 bytes.
+Also, like C language, the definition order in the source code matches the placement in memory.
+Note that there are no differences in 32-bit binaries and minimized binaries.
+
 ![repr_attribute](images/22-3.png)
 
-## 使用したサンプルプログラム
+## Sample Program Used
 
 ```rust
 use std::mem;

@@ -1,35 +1,35 @@
-# match文
+# Match Expressions
 
-Rustにおけるmatch文がアセンブリレベルでどのような特徴を持つか調査した。
+We investigated the characteristics of match expressions in Rust at the assembly level.
 
-## 調査結果
+## Investigation Results
 
-* 列挙型
-  - 最適化の過程で処理が省略される場合もあるが、基本的にはcmp命令やjmp命令による分岐、またはジャンプテーブルによる分岐に変換される。match文特有のアセンブリ命令は確認できなかった。
+* Enum types
+  - Although processing may be omitted during optimization, it is basically converted to branching using cmp and jmp instructions, or branching using jump tables. No assembly instructions specific to match expressions were confirmed.
 
-* 文字列
-  - 文字列の場合、特有の分岐方法が適用されることがあることが判明した。
+* Strings
+  - For strings, we found that specific branching methods may be applied.
 
-## 詳細
+## Details
 
-### 列挙型
+### Enum Types
 
-省略
+Omitted
 
-### 文字列
+### Strings
 
-文字列を用いたmatch文ではリリースビルドおよび最小化バイナリにて同様の特徴がある。
-以下で比較部分のアセンブリを示しているとおり、文字数の比較を行った後に、文字列の比較を行っている。
-最適化によって、より早く処理できる文字数の比較を行うことで無駄な文字列の比較を省いていると考えられる。
-文字列の比較では、一般的に行われる文字列の比較はcmp命令や`memcmp()`、`strcmp()`などのAPIを用いたものであるが、本バイナリではxor命令を用いて文字列の比較を行っていた。
-これは同じ数値同士のxor演算の結果は0になるという特性を利用した比較方法である。
-なお、32ビットバイナリにおいても同様の特徴がある。
+Match expressions using strings have similar characteristics in release builds and minimized binaries.
+As shown in the assembly of the comparison section below, string comparison is performed after comparing string lengths.
+Through optimization, it is considered that unnecessary string comparisons are avoided by first comparing string lengths, which can be processed more quickly.
+For string comparison, commonly used string comparisons employ the cmp instruction or APIs such as `memcmp()` or `strcmp()`, but in this binary, the xor instruction was used for string comparison.
+This is a comparison method that utilizes the property that the result of xor operations between the same numbers is 0.
+Note that 32-bit binaries have similar characteristics.
 
 ![match](images/11-1.png)
 
-## 使用したサンプルプログラム
+## Sample Programs Used
 
-* 文字列
+* Strings
 
 ```rust
 use std::env;

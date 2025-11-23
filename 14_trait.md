@@ -1,13 +1,13 @@
-# トレイト
+# Traits
 
-Rustにおいてトレイトを実装した関数の呼び出しが通常の関数呼び出しとどのように異なるか、また実装元トレイトを特定できるかどうかを明らかにすることを目的として調査した。
+We investigated how function calls implementing traits in Rust differ from normal function calls, and whether the source trait can be identified.
 
-## 調査結果
+## Investigation Results
 
-[動的ディスパッチ参照](16_dynamic_dispatch.md)のように仮想関数テーブル（VTable）が存在しない静的ディスパッチの場合、通常の関数呼び出しとの明確な差異は確認できず、実装元トレイトをアセンブリレベルで特定することは困難である。
+In the case of static dispatch where no virtual function table (VTable) exists, as in [Dynamic dispatch references](16_dynamic_dispatch.md), no clear differences from normal function calls were confirmed, and identifying the source trait at the assembly level is difficult.
 
-32ビットバイナリ、最小化バイナリ、およびデバッグビルドにおいても同様の結果が得られた。
+Similar results were obtained for 32-bit binaries, minimized binaries, and debug builds.
 
-## 詳細
+## Details
 
-省略
+Omitted

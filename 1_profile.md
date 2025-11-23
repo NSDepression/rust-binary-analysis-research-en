@@ -1,13 +1,13 @@
-# CargoのProfile設定の変更に伴うバイナリの差分
+# Binary Differences from Cargo Profile Setting Changes
 
-攻撃者は実行ファイルのサイズ削減や情報の隠蔽を目的として、CargoのProfile設定を変更してビルドを行う可能性がある。そのため、本調査ではCargoのProfileで設定可能な各オプションを個別に変更した場合のファイルサイズを測定し、最も効果的にサイズを削減できるProfile設定を特定した。
+Attackers may build with modified Cargo Profile settings to reduce executable size or hide information. Therefore, this investigation measured file sizes when individually changing each option available in Cargo Profile settings to identify the most effective Profile configuration for size reduction.
 
-さらに、各オプション単独で変更したバイナリから特有の情報やアセンブリコードの特徴を抽出し、その差異について調査を実施した。
+Furthermore, we extracted unique information and assembly code characteristics from binaries modified with individual options and investigated these differences.
 
-## 調査結果
+## Investigation Results
 
-最も実行ファイルのサイズを削減できるProfileのオプションは下記のとおりである。
-以降、各オプションの調査結果の詳細を記載する。
+The Profile options that most effectively reduce executable file size are as follows:
+Details of the investigation results for each option are described below.
 
 ```toml
 [profile.release]
@@ -19,45 +19,45 @@ panic = "abort"
 codegen-unit = 1
 ```
 
-## 詳細
+## Details
 
 ### opt-level
 
-最適化の度合いを決めるオプションである。
-サイズ削減を目的とした最適化を行うオプション`s`を指定することで、サイズが削減される。
-また、最も最適化を行わないオプションであるオプション`0`を指定した場合とバイナリを比較すると下記のような差分が確認できた。
+This option determines the degree of optimization.
+By specifying option `s`, which performs size-focused optimization, the size is reduced.
+When comparing binaries with option `0`, which performs the least optimization, the following differences were observed:
 
-* ループ方法において`opt-level=0`ではイテレータが使用されるが`opt-level="s"`ではdec命令およびjnz命令を使用している。
-* 余剰の計算方法において`opt-level=0`ではdiv命令が使用されるが`opt-level="s"`ではmul、shr、and命令を使用して表現している。
-* `opt-level="s"`ではスタックを用いた無駄なデータ転送が削除されている。
+* For looping methods, `opt-level=0` uses iterators, while `opt-level="s"` uses dec and jnz instructions.
+* For remainder calculations, `opt-level=0` uses the div instruction, while `opt-level="s"` expresses it using mul, shr, and and instructions.
+* With `opt-level="s"`, redundant data transfers using the stack are eliminated.
 
 ### split-debuginfo
 
-デバッグ情報をどこへ配置するかを決めるオプションである。
-`split-debuginfo=off`ではデバッグ情報は実行ファイルに埋め込まれ、`split-debuginfo=packed`ではpdbファイルやdwpファイルとして実行ファイルから分離される。
-Windows-MSVC環境ではpackedのみが有効となっているため、実行ファイルサイズや実行ファイルから得られる情報に影響しない。
+This option determines where debug information is placed.
+With `split-debuginfo=off`, debug information is embedded in the executable file, while with `split-debuginfo=packed`, it is separated from the executable as a pdb or dwp file.
+In Windows-MSVC environment, only packed is valid, so it does not affect executable size or information obtained from the executable.
 
 ### debug
 
-実行ファイルまたはpdbファイルに埋め込まれるデバッグ情報の量を制限するオプションである。
-Windows-MSVC環境では、実行ファイルにデバッグ情報を埋め込むことはできない。
-そのため、debugオプションはWindows-MSVC環境においては実行ファイルに影響を与えず、pdbファイルのサイズにのみ影響する。
+This option limits the amount of debug information embedded in the executable file or pdb file.
+In Windows-MSVC environment, debug information cannot be embedded in the executable file.
+Therefore, the debug option does not affect the executable in Windows-MSVC environment and only affects the pdb file size.
 
 ### strip
 
-シンボルやデバッグ情報をstripするか否かを決定するオプションである。
-Windows-MSVC環境では、実行ファイルにデバッグ情報を埋め込むことはできない。
-そのため、本オプションは実行ファイルのサイズには影響を与えず、pdbファイルのサイズにのみ影響する。
+This option determines whether to strip symbols and debug information.
+In Windows-MSVC environment, debug information cannot be embedded in the executable file.
+Therefore, this option does not affect executable file size and only affects pdb file size.
 
 ### debug-assertions
 
-debug_assert!()マクロの使用可否を決定するオプションである。
-debug-assertionsにおいて最もサイズを削減できる設定値は`false`である。
-設定値ごとのアセンブリの差分を調査した結果、`false`のバイナリではアサートを発生させるアセンブリが生成されない。
+This option determines whether the debug_assert!() macro can be used.
+The setting value that most reduces size for debug-assertions is `false`.
+Investigation of assembly differences for each setting value revealed that binaries with `false` do not generate assembly that triggers assertions.
 
-また、`true`のバイナリにのみ下記の文字列が確認できた。
-文字列`unsafe precondition(s) violated:`は`assert_unsafe_precondition`マクロ関数に含まれる文字列であり、Rust特有の文字列である。
-なお、本文字列は`Rust 1.78.0`以降の場合にのみ確認出来た。 
+Additionally, the following strings were only confirmed in binaries with `true`.
+The string `unsafe precondition(s) violated:` is a string contained in the `assert_unsafe_precondition` macro function and is specific to Rust.
+Note that this string was only confirmed with `Rust 1.78.0` and later.
 ```
 unsafe precondition(s) violated: usize::unchecked_mul cannot overflow
 
@@ -70,9 +70,9 @@ unsafe precondition(s) violated: Layout::from_size_align_unchecked requires that
 unsafe precondition(s) violated: slice::from_raw_parts requires the pointer to be aligned and non-null, and the total size of the slice not to exceed `isize::MAX`
 ```
 
-これらの文字列をシグネチャとして`debug-assertions`オプションが`true`か否かを判別するYARAルールは以下のとおりである。
-なお、これらの文字列は、Cargoによってデフォルトで生成されるHello Worldプログラムでは、`debug-assertions`が`true`であるにもかかわらず確認できなかった。
-その理由として、これらの文字列は`unsafe`ブロック内で使用されるため、標準ライブラリを含むプログラム内で`unsafe`ブロックが使用されている場合にのみ現れると予測する。
+A YARA rule using these strings as signatures to determine whether the `debug-assertions` option is `true` is as follows:
+Note that these strings were not confirmed in the Hello World program generated by Cargo by default, even when `debug-assertions` was `true`.
+The reason is that these strings are used within `unsafe` blocks, so they only appear when `unsafe` blocks are used in programs that include the standard library.
 
 ```yara
 rule Detect_DebugAssertions_Is_True
@@ -87,16 +87,16 @@ rule Detect_DebugAssertions_Is_True
 
 ### overflow-checks
 
-整数オーバーフローのチェックを行うか否かを決定するオプションである。
-`true`または`false`を指定できるが、両オプションにて実行ファイルのサイズは同じとなった。
-これは`true`の際に追加されたアセンブリのサイズが`.text`セクションのアラインメントをまたがなかったことに起因すると考えられる。
-本オプションで`.text`セクションのみ比較した場合は、わずかではあるが`false`のサイズの方が小さくなる。
+This option determines whether to perform integer overflow checks.
+`true` or `false` can be specified, but the executable file size was the same for both options.
+This is considered to be due to the size of the assembly added when `true` not crossing the alignment of the `.text` section.
+When comparing only the `.text` section with this option, `false` is slightly smaller in size.
 
-設定値ごとのアセンブリの差分を調査した結果、`true`のバイナリの場合、演算後にJB命令（carry = 1）を用いたオーバーフローチェックとパニックを発生させるアセンブリが生成された。
-一方、`false`のバイナリの場合、オーバーフローチェックやパニック処理は確認できなかった。
+Investigation of assembly differences for each setting value revealed that binaries with `true` generate assembly for overflow checking using the JB instruction (carry = 1) after operations and triggering panics.
+On the other hand, binaries with `false` show no overflow checking or panic handling.
 
-また、`true`のバイナリにのみ下記の文字列が確認できた。
-これらの文字列は`core/num/overflow_panic.rs`に含まれるオーバーフローによってパニックが発生した際に使用されるパニックメッセージである。
+Additionally, the following strings were only confirmed in binaries with `true`.
+These strings are panic messages used when a panic occurs due to overflow, contained in `core/num/overflow_panic.rs`.
 
 ```
 attempt to add with overflow
@@ -116,7 +116,7 @@ attempt to shift right with overflow
 attempt to shift left with overflow
 ```
 
-これらの文字列をシグネチャとして、`overflow-checks`オプションが`true`か否かを判別するYARAルールは、以下のとおりである。
+A YARA rule using these strings as signatures to determine whether the `overflow-checks` option is `true` is as follows:
 
 ```yara
 rule Detect_OverflowCheck_Is_True
@@ -138,22 +138,22 @@ rule Detect_OverflowCheck_Is_True
 
 ### lto
 
-LLVMリンク時の最適化を制御するオプションである。
-実行ファイルのサイズを削減できる設定値は`fat`である。
+This option controls LLVM link-time optimization.
+The setting value that reduces executable file size is `fat`.
 
-なお、`lto`オプションを`fat`に設定したバイナリを調査した結果、以下のような特徴が抽出された。
+Investigation of binaries with the `lto` option set to `fat` revealed the following characteristics:
 
-* `lang_start_internal()`や`_print()`とその内部で呼び出される関数のインライン化
-* ユーザー定義main関数の呼び出しフローの簡略化
+* Inlining of `lang_start_internal()`, `_print()` and functions called internally
+* Simplified call flow of user-defined main function
 
 ### panic
 
-パニック発生時の挙動を決定するオプションである。
-実行ファイルのサイズを削減できる設定値は`abort`である。
-また、バイナリの差分としては、`Exception Directory`においてユーザー定義ではないmain関数の`Unwind Data`が削除されていた。
-これはWindowsにおいて例外時にスタックトレースを取得するための情報がないことを示している。
+This option determines behavior when a panic occurs.
+The setting value that reduces executable file size is `abort`.
+As for binary differences, the `Unwind Data` of the main function that is not user-defined was removed in the `Exception Directory`.
+This indicates there is no information for obtaining stack traces during exceptions on Windows.
 
-設定値が`unwind`のバイナリにのみ、下記の文字列が確認できた。
+The following strings were only confirmed in binaries with the setting value `unwind`:
 ```
 fatal runtime error: Rust panics must be rethrown
 
@@ -164,13 +164,13 @@ Rust panics cannot be copied
 _CxxThrowException
 ```
 
-これらはパニック関連の文字列であり、内容は以下のとおりである。
+These are panic-related strings, and their contents are as follows:
 
-* `fatal runtime error:`を含む文字列は、`unwind`時に発生するパニックメッセージであり、これらの文字列は`Rust 1.71.0`以降にのみ確認出来た。
-* `Rust panics cannot be copied`はWindowsのSEH関連の処理を行う`define_cleanup`マクロ関数に含まれるパニックメッセージ
-* `_CxxThrowException`は最終的に例外を発生させるのに使用されるWindows APIであり、`unwind`バイナリが`_CxxThrowException`を呼び出して例外を発生させているのに対して、`abort`バイナリでは`RtlFailFast(int 29H)`というシステムコール命令を用いてプログラムを終了させている。
+* Strings containing `fatal runtime error:` are panic messages that occur during `unwind`, and these strings were only confirmed with `Rust 1.71.0` and later.
+* `Rust panics cannot be copied` is a panic message contained in the `define_cleanup` macro function that performs Windows SEH-related processing
+* `_CxxThrowException` is a Windows API used to ultimately trigger exceptions. `unwind` binaries call `_CxxThrowException` to trigger exceptions, whereas `abort` binaries terminate the program using a system call instruction `RtlFailFast(int 29H)`.
 
-これらの文字列をシグネチャとして、`panic`オプションが`abort`か否かを判別するYARAルールは、以下のとおりである。
+A YARA rule using these strings as signatures to determine whether the `panic` option is `abort` is as follows:
 
 ```yara
 rule Detect_Panic_Is_Abort
@@ -192,17 +192,17 @@ rule Detect_Panic_Is_Abort
 
 ### incremental
 
-本オプションを有効にした場合、再コンパイル時に使用される情報を`target`ディレクトリに保存する設定であり、実行ファイルのサイズや生成されるアセンブリに影響を及ぼさないオプションである。
-`true`の場合、プロジェクトフォルダーの`target\release\incremental`直下に再利用されるデータが生成される。
+When this option is enabled, it saves information used during recompilation to the `target` directory and is an option that does not affect executable file size or generated assembly.
+When `true`, reusable data is generated under `target\release\incremental` in the project folder.
 
 ### codegen-units
 
-クレートをいくつに分割してコンパイル処理を行うかを指定するオプションである。
-分割数が多くなると、その分並列処理できるため、コンパイル時間の短縮につながるが生成されるコードが遅いコードとなる可能性がある。
-codegen-unitsの値を`1`に設定することでバイナリサイズが削減できる。
+This option specifies how many parts to divide the crate into for compilation processing.
+The more divisions, the more parallel processing is possible, leading to shorter compilation times, but the generated code may be slower.
+Binary size can be reduced by setting the codegen-units value to `1`.
 
 ### rpath
 
-実行時に動的ライブラリを検索するパスを指定するためのオプションである。
-これにより柔軟なライブラリ配置、カスタムディレクトリの使用が可能となる。
-実行ファイルのサイズに影響を与えるオプションではない。
+This option specifies paths to search for dynamic libraries at runtime.
+This enables flexible library placement and use of custom directories.
+This option does not affect executable file size.

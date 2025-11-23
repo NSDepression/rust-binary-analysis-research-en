@@ -1,27 +1,27 @@
-# 同一ジェネリクスから生成された関数の識別
+# Identifying Functions Generated from the Same Generic
 
-同一ジェネリック関数から生成した関数が、生成元となった関数を特定する方法があるかを調査した。
+We investigated whether there is a method to identify the source function for functions generated from the same generic function.
 
-## 調査結果
+## Investigation Results
 
-* `core::panic::Location`構造体を利用してパニックを発生させる処理が関数内にある場合、同一のジェネリック関数で生成された関数の特定が可能である。
-  - `core::panic::Location`構造体はパニックが発生するソースコードのパス、行番号、列番号を含む構造体である。
-  - 異なる関数の場合、行番号や列番号が一致しないが、同一のジェネリック関数から生成された関数の間ではソースコードのパス、行番号、列番号がすべて一致する。
+* When there is processing within a function that triggers a panic using the `core::panic::Location` structure, it is possible to identify functions generated from the same generic function.
+  - The `core::panic::Location` structure is a structure that contains the source code path, line number, and column number where the panic occurs.
+  - For different functions, line numbers and column numbers do not match, but among functions generated from the same generic function, the source code path, line number, and column number all match.
 
-なお、ジェネリック関数がインライン展開されている場合（リリースビルドおよび最小化バイナリ）や、`core::panic::Location`構造体の情報を削除するビルドオプションが使用されている場合、この方法で特定することはできない。
+Note that this method cannot be used for identification when generic functions are inline-expanded (release builds and minimized binaries), or when build options that remove `core::panic::Location` structure information are used.
 
-## 詳細
+## Details
 
-最適化の影響を受けないデバッグビルドの場合、以下のように関数実行時の第三引数にて`core::panic::Location`構造体を受け取る。
-バイナリ内の`core::panic::Location`構造体を探索し、各構造体が、2つ以上の参照場所がある場合、参照元の関数は同じジェネリック関数から生成された関数である。
+In debug builds not affected by optimization, the `core::panic::Location` structure is received as the third argument during function execution as shown below.
+By searching for `core::panic::Location` structures in the binary, if each structure has two or more reference locations, the functions referencing it are functions generated from the same generic function.
 
 ![generics_function](images/18-1.png)
 
-`core::panic::Location`構造体の中身を以下に示す。
-この例では、パスが「src/main.rs」、行番号が2、列番号が5であることを示している。
+The contents of the `core::panic::Location` structure are shown below.
+In this example, it indicates the path is "src/main.rs", line number is 2, and column number is 5.
 
 ![generics_function](images/18-2.png)
 
-同じジェネリック関数から生成された関数であるならば、内部処理の類似性は高いと考えられるため、生成元が同じ関数の解析を省く、差異のみを解析するなどで解析時間の短縮につながる。
+If they are functions generated from the same generic function, internal processing similarity is expected to be high, so omitting analysis of functions with the same source or analyzing only differences can reduce analysis time.
 
-32ビットバイナリにおいても、`core::panic::Location`構造体のサイズは異なるが、同じような特徴がみられた。
+Even in 32-bit binaries, although the size of the `core::panic::Location` structure is different, similar characteristics were observed.

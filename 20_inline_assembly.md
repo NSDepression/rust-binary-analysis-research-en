@@ -1,23 +1,23 @@
-# インラインアセンブリ
+# Inline Assembly
 
-インラインアセンブリで使用される各キーワード（in、out、inout、lateout、inlateout、options、clobber）のアセンブリ上の特徴を調査した。
+We investigated assembly characteristics of each keyword (in, out, inout, lateout, inlateout, options, clobber) used in inline assembly.
 
-## 調査結果
+## Investigation Results
 
-一部特徴的なアセンブリが確認できるものの、ほとんどのキーワードでアセンブリ上の特徴は確認できない。
+Although some characteristic assembly can be confirmed, no assembly characteristics can be confirmed for most keywords.
 
-## 詳細
+## Details
 
-`clobber_abi`(ABIで保存されないレジスタを保存する)を使用したバイナリをリリースビルドにした場合、関数プロローグにてxmm6～15レジスタがスタックへ保存され、関数エピローグにて復元される処理が追加されるが、それ以外の特徴はない。
+When a binary using `clobber_abi` (saves registers not saved by ABI) is release built, processing is added to save xmm6-15 registers to the stack in the function prologue and restore them in the function epilogue, but there are no other characteristics.
 
 ![inline_assembly](images/20-1.png)
 
-## 使用したサンプルプログラム
+## Sample Program Used
 
 ```rust
 #![allow(unused)]
 fn main() {
-    #[cfg(target_arch = "x86_64")] { //32bitバイナリを作成する際はx86へ変更
+    #[cfg(target_arch = "x86_64")] { //Change to x86 when creating 32bit binary
         use std::arch::asm;
 
         extern "C" fn foo(arg: i32) -> i32 {
@@ -31,17 +31,13 @@ fn main() {
                 asm!(
                     "call {}",
                     // Function pointer to call
-                    // 呼び出す関数ポインター
                     in(reg) foo,
                     // 1st argument in rdi
-                    // 最初の引数はrdiにある
                     in("rdi") arg,
                     // Return value in rax
-                    // 戻り値はraxにある
                     out("rax") result,
                     // Mark all registers which are not preserved by the "C" calling
                     // convention as clobbered.
-                    // "C"の呼び出し規約で保存されていないすべてのレジスタをクロバーに指定
                     clobber_abi("C"),
                 );
                 result

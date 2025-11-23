@@ -1,24 +1,24 @@
-# バイナリサイズ削減
+# Binary Size Reduction
 
-攻撃者は痕跡を隠す目的で、バイナリサイズの削減を図る可能性がある。そのため、[公開情報](https://github.com/johnthagen/min-sized-rust)で紹介されているバイナリサイズ削減手法について、どの程度サイズを削減可能なのか、また削減後も消去されずに残存する情報からどのような情報を得られるのかを調査した。
+Attackers may attempt to reduce binary size to hide traces. Therefore, we investigated the binary size reduction techniques introduced in [public information](https://github.com/johnthagen/min-sized-rust) to determine how much size reduction is possible and what information can be obtained from data that remains after reduction.
 
-## 調査結果
+## Investigation Results
 
-バイナリサイズを最小化する際に使用するビルドコマンドは以下のとおりである。
+The build command used to minimize binary size is as follows:
 
 ```
 $env:RUSTFLAGS="-Zfmt-debug=none -Zlocation-detail=none";cargo +nightly build -Z build-std=std,panic_abort -Z build-std-features="optimize_for_size" -Z build-std-features=panic_immediate_abort --target x86_64-pc-windows-msvc --release
 ```
 
-## 詳細
+## Details
 
 ### Remove Location Details
 
-`location-detail`オプションは、バックトレース情報をコントロールすることができるビルドオプションである。
-本ビルドオプションを`none`に指定することで、パニック時に使用される`core::panic::Location`構造体におけるソースコードパスを示す値が`<redacted>`に置き換えられるとともに、ソースコードの行と列を示す値も0に置き換えられる。
-`location-detail`オプションを`none`に指定することで、ソースコードパスが削除されるため、バイナリサイズの削減が可能である。
-加えて、当該情報を削除することでバックトレースが正常に出力されなくなるほか、ライブラリの識別に関する調査に影響すると推測される。
-`<redacted>`と`<redacted>`を含む`core::panic::Location`構造体をシグネチャとして、`-Zlocation-detail=none`が用いられているか否かを判別するYARAルールを下記に示す。
+The `location-detail` option is a build option that can control backtrace information.
+By specifying this build option as `none`, the value indicating the source code path in the `core::panic::Location` structure used during panics is replaced with `<redacted>`, and the values indicating the line and column of the source code are also replaced with 0.
+By specifying the `location-detail` option as `none`, the source code path is removed, enabling binary size reduction.
+Additionally, removing this information prevents backtraces from being output normally and is expected to affect investigation of library identification.
+A YARA rule using the `core::panic::Location` structure containing `<redacted>` as a signature to determine whether `-Zlocation-detail=none` is used is shown below.
 
 ```yara
 rule Detect_LocationDetail_Is_None
@@ -42,7 +42,7 @@ rule Detect_LocationDetail_Is_None
             00 00 00 00
         }
         $c2 = {
-            0A 00 00 00 
+            0A 00 00 00
             00 00 00 00
             00 00 00 00
         }
@@ -54,21 +54,21 @@ rule Detect_LocationDetail_Is_None
 
 ### Remove fmt::Debug
 
-`fmt-debug`オプションを用いると、`#[derive(Debug)]`および`{:?}`の出力を操作することができる。
-本ビルドオプションを`-Zfmt-debug=none`に設定すると、内部で`#[derive(Debug)]`および`{:?}`を使用している`dbg!()`、`assert!()`、`unwrap()`などのマクロの出力が一部削除される。
-そのため、`-Zfmt-debug=none`を使用することでバイナリサイズの削減が可能である。
+The `fmt-debug` option can manipulate the output of `#[derive(Debug)]` and `{:?}`.
+When this build option is set to `-Zfmt-debug=none`, output from macros such as `dbg!()`, `assert!()`, and `unwrap()` that internally use `#[derive(Debug)]` and `{:?}` is partially removed.
+Therefore, binary size can be reduced by using `-Zfmt-debug=none`.
 
 ### Optimize libstd with build-std
 
-バイナリにリンクされる標準ライブラリはデフォルトの状態であっても速度面で最適化されているが、サイズ面では最適化されていない。
-本ビルドオプション`-Z build-std=std,panic_abort -Z build-std-features="optimize_for_size"`で標準ライブラリを指定した上で、サイズ面で最適化した状態に再ビルドすることが可能である。
-サイズ面で最適化したバイナリをリンクした場合、実行ファイルのサイズを削減できる。
+The standard library linked to binaries is optimized for speed even in the default state, but not for size.
+With this build option `-Z build-std=std,panic_abort -Z build-std-features="optimize_for_size"`, it is possible to rebuild with the standard library specified and optimized for size.
+When a binary optimized for size is linked, the executable file size can be reduced.
 
 ### Remove panic String Formatting with panic_immediate_abort
 
-`Cargo`の`Profile`設定で指定可能な`panic="abort"`は標準ライブラリには適用されない。
-ビルドオプション`-Z build-std-features=panic_immediate_abort`を使用することで、標準ライブラリにも`panic="abort"`を適用することができる。
-本ビルドオプションを使用することで、バイナリのサイズを削減できる。
+The `panic="abort"` setting available in `Cargo`'s `Profile` configuration does not apply to the standard library.
+By using the build option `-Z build-std-features=panic_immediate_abort`, `panic="abort"` can also be applied to the standard library.
+Using this build option can reduce binary size.
 
-また、`panic_immediate_abort`を指定したバイナリからは、[Rustバイナリの識別](3_identify_rust_binary.md)で解説した特徴的な文字列が削除されているため、Rustバイナリとして認識できなくなる可能性がある。
-加えて、パニックメッセージが削除されることから、使用しているライブラリの識別に影響すると考えられる。
+Additionally, binaries with `panic_immediate_abort` specified have the characteristic strings explained in [Identifying Rust binaries](3_identify_rust_binary.md) removed, so they may not be recognized as Rust binaries.
+Furthermore, since panic messages are removed, this is expected to affect identification of libraries being used.

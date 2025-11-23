@@ -1,97 +1,97 @@
-# スマートポインター
+# Smart Pointers
 
-RustのスマートポインターであるBox型、Rc型、Cell型、RefCell型、それぞれのアセンブリ上の特徴およびメモリレイアウトを調査した。
+We investigated assembly characteristics and memory layout of Rust smart pointers: Box type, Rc type, Cell type, and RefCell type.
 
-## 調査結果
+## Investigation Results
 
-各型の構造体と仕様について以降で説明する。
+The structure and specifications of each type are explained below.
 
-## 詳細
+## Details
 
 ### Box<T>
 
-#### 1. Box<T>の生成
+#### 1. Box<T> Creation
 
-`__rust_alloc()`でヒープメモリを確保する。(最終的にはWindows APIの`HeapAlloc()`でメモリを確保する。)
+Heap memory is allocated with `__rust_alloc()`. (Ultimately, memory is allocated with the Windows API `HeapAlloc()`.)
 
-#### 2. メモリの初期化
+#### 2. Memory Initialization
 
-`Box<T>`を連鎖構造で定義した場合、以下のようにヒープが初期化される。
-Rustではデフォルトでサイズが大きい順にメモリに配置される。
+When `Box<T>` is defined in a chain structure, the heap is initialized as follows.
+In Rust, memory is placed by default in descending order of size.
 
 ```c
-変数firstのヒープメモリ {
+Heap memory for variable first {
     Offset+0x00: next: second address
     Offset+0x08: value: 0x00000001
 }
-変数second のヒープメモリ {
+Heap memory for variable second {
     Offset+0x00: next: third address
     Offset+0x08: value: 0x00000002
 }
-変数thirdのヒープメモリ{
+Heap memory for variable third {
     Offset+0x00: next: 0x00000000
     Offset+0x08: value: 0x00000003
 }
 ```
 
-#### 3. 自動解放
+#### 3. Automatic Deallocation
 
-`Box<T>`は自動解放を実装している。
-以下は、自動解放処理の内部処理である。
-`sub_7FF7AFC41030()`は再帰関数となっている。
-これにより、連鎖構造になっているメモリでも解放することができる。
+`Box<T>` implements automatic deallocation.
+The following is the internal processing of automatic deallocation.
+`sub_7FF7AFC41030()` is a recursive function.
+This allows memory in a chain structure to be deallocated.
 
 ![smart_pointer](images/19-1.png)
 
 ### Rc<T>
 
-#### 1. メモリの初期化 Rc::new()
+#### 1. Memory Initialization Rc::new()
 
-`Rc<T>`のメモリ初期化はインライン展開される。
-ヒープにメモリを確保し、さらにRc`<T>`管理用構造体をヒープに確保する。
+`Rc<T>` memory initialization is inline-expanded.
+Memory is allocated on the heap, and further `Rc<T>` management structure is allocated on the heap.
 
 ![smart_pointer](images/19-2.png)
 
-`Rc<T>`管理用構造体は、以下のとおりである。
-最小化バイナリにおいても同様の管理用構造体が作成される。
-32ビットバイナリでもアドレスを4バイトで扱う点を除けば同様である。
+The `Rc<T>` management structure is as follows.
+Similar management structures are created even in minimized binaries.
+32-bit binaries are similar except for handling addresses as 4 bytes.
 
 ```c
-Rc<T> 管理用構造体 {
-    0x00: 強参照カウント
-    0x08: 弱参照カウント
-    0x10: 型パラメーターに指定された具象型
+Rc<T> management structure {
+    0x00: Strong reference count
+    0x08: Weak reference count
+    0x10: Concrete type specified in type parameter
 }
 ```
 
 ### Cell<T>
 
-リリースビルドおよび最小化バイナリでは、最適化によって当該の処理が削除される。
-また、デバッグビルドのバイナリでも特徴的な処理はないため、Cell型が使用されているか識別することは出来ない。
+In release builds and minimized binaries, the relevant processing is removed due to optimization.
+Also, even in debug build binaries, there is no characteristic processing, so it cannot be identified whether the Cell type is used.
 
 ### RefCell<T>
 
-#### 1. メモリの初期化 RefCell<T>
+#### 1. Memory Initialization RefCell<T>
 
-RefCellの管理用構造体は以下のとおりである。
+The management structure of RefCell is as follows:
 
 ```c
-RefCell<T> 管理用構造体 {
+RefCell<T> management structure {
     0x00: Ref Counter
-    0x08: 型パラメーターに指定された具象型
+    0x08: Concrete type specified in type parameter
 }
 ```
 
-RefCellは借用と可変借用という概念があり、借用は複数の変数から可能だが、可変借用できるのは一つの変数のみという制約がある。
-借用を実行する関数である`borrow()`を呼び出すと`Ref Counter`がインクリメントされる。
-また、可変借用を行う`borrow_mut()`を呼び出すと`Ref Counter`が`-1`となる。
-そのため、`Ref Counter`が0未満という状況は可変借用中であることを示しており、この時に借用・可変借用を行うと実行時エラーが発生する。
+RefCell has the concepts of borrowing and mutable borrowing, where borrowing is possible from multiple variables, but mutable borrowing can only be done by one variable.
+When calling the `borrow()` function that performs borrowing, the `Ref Counter` is incremented.
+Also, when calling `borrow_mut()` that performs mutable borrowing, the `Ref Counter` becomes `-1`.
+Therefore, a situation where `Ref Counter` is less than 0 indicates mutable borrowing is in progress, and performing borrowing or mutable borrowing at this time causes a runtime error.
 
 ![smart_pointer](images/19-3.png)
 
-## 使用したサンプルプログラム
+## Sample Programs Used
 
-* Box型のサンプルプログラム
+* Box type sample program
 
 ```rust
 struct Node {
@@ -112,7 +112,7 @@ fn main() {
     if let Some(ref mut next_node) = first.next {
         next_node.next = Some(Box::new(Node::new(3)));
     }
-    
+
     println!("First value: {}", first.value);
     if let Some(ref next_node) = first.next {
         println!("Next value: {}", next_node.value);
@@ -123,42 +123,42 @@ fn main() {
 }
 ```
 
-* Rc型のサンプルプログラム
+* Rc type sample program
 
 ```rust
 use std::rc::{Rc, Weak};
 
 fn main() {
-    // Rcを使って、共有するデータを作成
+    // Create shared data using Rc
     let data = Rc::new("Hello, Rc!".to_string());
 
-    // Rcの参照カウントを確認
+    // Check Rc reference count
     println!("Initial reference strong count: {}", Rc::strong_count(&data));
     println!("Initial reference weak count: {}", Rc::weak_count(&data));
 
     {
-        // 弱参照が増加
+        // Weak reference increases
         let weak_ref: Weak<String> = Rc::downgrade(&data);
         println!("Reference strong count after downgrade: {}", Rc::strong_count(&data));
         println!("Reference weak count after downgrade: {}", Rc::weak_count(&data));
     }
 
-    // dataをcloneして新しいRcを作成（強参照カウントが増加）
+    // Clone data to create a new Rc (strong reference count increases)
     let data_clone1 = Rc::clone(&data);
     println!("Reference strong count after clone1: {}", Rc::strong_count(&data));
     println!("Reference weak count after clone1: {}", Rc::weak_count(&data));
 
-    // もう一つclone（強参照カウントが増加）
+    // Another clone (strong reference count increases)
     let data_clone2 = Rc::clone(&data);
     println!("Reference strong count after clone2: {}", Rc::strong_count(&data));
     println!("Reference weak count after clone2: {}", Rc::weak_count(&data));
 
-    // 各変数がデータを参照
+    // Each variable references the data
     println!("Original data: {}", data);
     println!("Clone 1 data: {}", data_clone1);
     println!("Clone 2 data: {}", data_clone2);
 
-    // data_clone1とdata_clone2がスコープを抜けると参照カウントが減少
+    // Reference count decreases when data_clone1 and data_clone2 go out of scope
     drop(data_clone1);
     println!("Reference strong count after dropping clone1: {}", Rc::strong_count(&data));
     println!("Reference weak count after dropping clone1: {}", Rc::weak_count(&data));
@@ -167,13 +167,13 @@ fn main() {
     println!("Reference strong count after dropping clone2: {}", Rc::strong_count(&data));
     println!("Reference weak count after dropping clone2: {}", Rc::weak_count(&data));
 
-    // 最後にdataがスコープを抜けるとメモリが解放される
+    // Finally, memory is released when data goes out of scope
     drop(data);
     println!("Dropped the original data.");
 }
 ```
 
-* Cell型のサンプルプログラム
+* Cell type sample program
 
 ```rust
 use std::cell::Cell;
@@ -192,7 +192,7 @@ fn main() {
 }
 ```
 
-* RefCell型のサンプルプログラム
+* RefCell type sample program
 
 ```rust
 use std::cell::RefCell;
@@ -216,28 +216,28 @@ impl MyStruct {
 fn main() {
     let my_struct = RefCell::new(MyStruct::new(5, "Example", "This is a sample struct."));
 
-    // 値を借用して読み取る
+    // Borrow value to read
     {
         let borrowed_struct = my_struct.borrow();
-        println!("Borrowed value: {}", borrowed_struct.value); // 5と表示される
-        println!("Name: {}", borrowed_struct.name); // "Example"と表示される
-        println!("Description: {}", borrowed_struct.description); // "This is a sample struct."と表示される
-    } // borrowed_structのスコープが終了し、借用が解放される
+        println!("Borrowed value: {}", borrowed_struct.value); // Displays 5
+        println!("Name: {}", borrowed_struct.name); // Displays "Example"
+        println!("Description: {}", borrowed_struct.description); // Displays "This is a sample struct."
+    } // borrowed_struct scope ends and borrow is released
 
-    // 値を変更するために可変借用を行う
+    // Perform mutable borrow to change value
     {
         let mut borrowed_mut_struct = my_struct.borrow_mut();
-        borrowed_mut_struct.value += 10; // 5に10を加算
-        borrowed_mut_struct.name = "Updated Example".to_string(); // 名前を更新
-        borrowed_mut_struct.description = "This struct has been updated.".to_string(); // 説明を更新
-    } // mutable borrowがここで終了する
+        borrowed_mut_struct.value += 10; // Add 10 to 5
+        borrowed_mut_struct.name = "Updated Example".to_string(); // Update name
+        borrowed_mut_struct.description = "This struct has been updated.".to_string(); // Update description
+    } // mutable borrow ends here
 
-    // 再度値を借用して読み取る
+    // Borrow value again to read
     {
         let updated_borrowed_struct = my_struct.borrow();
-        println!("Updated value: {}", updated_borrowed_struct.value); // 15と表示される
-        println!("Updated Name: {}", updated_borrowed_struct.name); // "Updated Example"と表示される
-        println!("Updated Description: {}", updated_borrowed_struct.description); // "This struct has been updated."と表示される
+        println!("Updated value: {}", updated_borrowed_struct.value); // Displays 15
+        println!("Updated Name: {}", updated_borrowed_struct.name); // Displays "Updated Example"
+        println!("Updated Description: {}", updated_borrowed_struct.description); // Displays "This struct has been updated."
     }
 }
 ```

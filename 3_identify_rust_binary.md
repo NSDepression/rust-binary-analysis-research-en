@@ -1,20 +1,20 @@
-# Rustバイナリの識別
+# Identifying Rust Binaries
 
-Rustバイナリの識別を目的に、リリースビルドおよび最小化ビルドのRustバイナリ特有の文字列やバイト列などを調査した。
+For the purpose of identifying Rust binaries, we investigated strings and byte sequences specific to release build and minimized build Rust binaries.
 
-## 調査結果
+## Investigation Results
 
-調査の結果、複数の特徴的な文字列とその文字列を使用する`core::panic::Location`構造体を組み合わせることで、YARAルールでRustの最小化バイナリの検出が一部可能であることを確認した。
+As a result of the investigation, we confirmed that it is partially possible to detect minimized Rust binaries with YARA rules by combining multiple characteristic strings with the `core::panic::Location` structure that uses those strings.
 
-## 詳細
+## Details
 
-[CargoのProfile設定の変更に伴うバイナリの差分](1_profile.md)、[バイナリサイズ削減](2_minimize_binary.md)および[main関数の特定と初期化処理](6_identify_main_function.md)の調査結果から、Rustバイナリの判定を行うYARAルールを作成した。
+Based on the investigation results from [Binary differences from Cargo Profile setting changes](1_profile.md), [Binary size reduction](2_minimize_binary.md), and [Identifying the main function and initialization process](6_identify_main_function.md), we created a YARA rule to detect Rust binaries.
 
 ```yara
 private rule PE_Signature
 {
     condition:
-        uint16(0) == 0x5A4D 
+        uint16(0) == 0x5A4D
 }
 
 private rule Plain_Rust_Binary
@@ -27,7 +27,7 @@ private rule Plain_Rust_Binary
         $s1 = "run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
         $s2 = "called `Result::unwrap()` on an `Err` value"
         $s3 = "called `Option::unwrap()` on a `None` value"
-    
+
     condition:
         PE_Signature and all of them
 }
@@ -43,13 +43,13 @@ private rule Minsized_Rust_Binary
         $s2 = "<redacted>"
         $s3 = "failed to write whole buffer"
         $s4 = "failed to write the buffered data"
-        $c1_64 = {1C 00 00 00 00 00 00 00 17 00 00 00 00 00 00 00} 
-        $c1_32 = {1C 00 00 00 17 00 00 00} 
-        $c2_64 = {21 00 00 00 00 00 00 00 17 00 00 00 00 00 00 00} 
-        $c2_32 = {21 00 00 00 17 00 00 00} 
-    
+        $c1_64 = {1C 00 00 00 00 00 00 00 17 00 00 00 00 00 00 00}
+        $c1_32 = {1C 00 00 00 17 00 00 00}
+        $c2_64 = {21 00 00 00 00 00 00 00 17 00 00 00 00 00 00 00}
+        $c2_32 = {21 00 00 00 17 00 00 00}
+
     condition:
-        PE_Signature and 3 of ($s*) and 1 of ($c1*) and 1 of ($c2*) 
+        PE_Signature and 3 of ($s*) and 1 of ($c1*) and 1 of ($c2*)
 }
 
 rule Rust_Binary

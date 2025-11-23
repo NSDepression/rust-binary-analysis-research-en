@@ -1,155 +1,155 @@
-# イテレータ
+# Iterators
 
-Rustにおけるイテレータのメモリレイアウトを解析し、特に使用頻度の高い `Vec` 型と `VecDeque` 型のイテレータ構造や特徴を明らかにすることを目的として調査した。
+We investigated the memory layout of iterators in Rust, aiming to clarify the iterator structure and characteristics of the frequently used `Vec` type and `VecDeque` type.
 
-## 調査結果
+## Investigation Results
 
-* **Vec型のイテレータ**
+* **Vec Type Iterator**
 
-  * バッファーの先頭アドレスと終端アドレスの2つで構成される。
-  * リリースビルドや最小化バイナリでは、最適化によりイテレータの使用痕跡が確認できない。
+  * Composed of two elements: the start address and end address of the buffer.
+  * In release builds and minimized binaries, no traces of iterator usage can be confirmed due to optimization.
 
-* **VecDeque型のイテレータ**
+* **VecDeque Type Iterator**
 
-  * 循環バッファーとして設計されているため、以下4つのポインターで構成される。
+  * Since it is designed as a circular buffer, it is composed of the following four pointers:
 
-    1. 先頭データを示すアドレス
-    2. バッファー終端アドレス
-    3. バッファー先頭アドレス
-    4. 終端データ + 1 を示すアドレス
-  * この構造により循環データの特性を活かした効率的なイテレーションを実現している。
+    1. Address indicating the first data
+    2. Buffer end address
+    3. Buffer start address
+    4. Address indicating the end data + 1
+  * This structure realizes efficient iteration that leverages the characteristics of circular data.
 
-### Vec型のイテレータのメモリレイアウト
+### Memory Layout of Vec Type Iterator
 
-Vec型のイテレータのメモリレイアウトは以下の図のとおり。
-なお、Vec型の管理用構造体については [コレクション](17_collection.md)を参照。
+The memory layout of the Vec type iterator is shown in the figure below.
+For the management structure of the Vec type, refer to [Collections](17_collection.md).
 
 ![iterator](images/13-1.png)
 
-### VecDeque 型のイテレータのメモリレイアウト
+### Memory Layout of VecDeque Type Iterator
 
-VecDeque型のイテレータのメモリレイアウトは以下の図のとおり。
-なお、VecDeque型の管理用構造体については [コレクション](17_collection.md)を参照。
+The memory layout of the VecDeque type iterator is shown in the figure below.
+For the management structure of the VecDeque type, refer to [Collections](17_collection.md).
 
 ![iterator](images/13-2.png)
 
-## 詳細
+## Details
 
-調査に使用したサンプルプログラムは、[後半](#使用したサンプルプログラム)に記載している。
+The sample programs used for the investigation are described [later](#sample-programs-used).
 
-### Vec型のイテレータ
+### Vec Type Iterator
 
-#### 最適化の影響を受けない場合(デバッグビルド)
+#### When Not Affected by Optimization (Debug Build)
 
-以下は、サンプルプログラムにおけるiter()の呼び出し箇所を示している。
+The following shows the call site of iter() in the sample program.
 
 ![iterator](images/13-3.png)
 
-iter()は第一引数にVecの先頭アドレス、第二引数にVecの現在の要素数を受け取る。
-これらの値はVec型の管理用構造体から取得している。
-内部では、Vecの終端要素のオフセットを算出するために、現在の要素数×要素あたりのバイト数（4バイト）の計算を行う。
-その後、先頭アドレスに終端要素のオフセットを加算し、終端アドレスを算出する。
-最終的にraxレジスタに先頭アドレス、rdxレジスタに終端アドレスを格納し、リターンする。
+iter() receives the start address of Vec as the first argument and the current number of elements of Vec as the second argument.
+These values are obtained from the management structure of the Vec type.
+Internally, to calculate the offset of the end element of Vec, it performs the calculation of current number of elements × bytes per element (4 bytes).
+Then, it adds the offset of the end element to the start address to calculate the end address.
+Finally, it stores the start address in the rax register and the end address in the rdx register, and returns.
 
 ![iterator](images/13-4.png)
 
-後続の呼び出しである`filter()`、`cloned()`、`collect()`は第一引数に先頭アドレス、第二引数に終端アドレスを受け取り、Vecの各要素にアクセスする。
+The subsequent calls to `filter()`, `cloned()`, and `collect()` receive the start address as the first argument and the end address as the second argument, and access each element of Vec.
 
-#### 最適化の影響を受けた場合(リリースビルド)
+#### When Affected by Optimization (Release Build)
 
-リリースビルドしたバイナリではイテレータが使用されておらず、`filter()`、`cloned()`、`collect()`といった高レベルな処理はアセンブリ上では確認できない。
-これらの処理はコンパイラの最適化によってインライン展開され、不要な部分が削除されたとものと考えられる。
+In binaries built with release build, iterators are not used, and high-level processing such as `filter()`, `cloned()`, and `collect()` cannot be confirmed in assembly.
+These processes are considered to have been inline-expanded by compiler optimization and unnecessary parts removed.
 
-以下は、サンプルプログラムにおけるVecの各要素に対して偶数チェックを行い、奇数のみを抽出して新しいVecを作成する箇所である。
+The following is the part in the sample program that checks each element of Vec for even numbers, extracts only odd numbers, and creates a new Vec.
 
 ![iterator](images/13-5.png)
 
-アドレス`0x00007FF6A4041360`では、Vecの終端チェックが行われている。
-r12レジスタには現在指している要素へのオフセットが格納されており、`0x1C(28)`は4バイト×7要素のVecにおける終端のオフセットを示している。
-アドレス`0x00007FF6A4041366`から始まるブロックでは、以下の処理が行われている。
+At address `0x00007FF6A4041360`, a Vec end check is performed.
+The r12 register stores the offset to the currently pointed element, and `0x1C(28)` indicates the offset of the end in a Vec of 4 bytes × 7 elements.
+In the block starting from address `0x00007FF6A4041366`, the following processing is performed:
 
-* 現在の要素をVecから取得し、r12レジスタに格納されたオフセットを次の要素を指すように4加算する。
-* test命令と即値1を用いて偶数判定を行う。この判定では、偶数は1ビット目が0、奇数は1ビット目が1である性質を利用している。
-  - 判定の結果、偶数の場合は終端チェックに遷移し、奇数の場合は新しい奇数のみのVecへ要素を追加する処理に遷移する。
+* The current element is retrieved from Vec, and 4 is added to the offset stored in the r12 register to point to the next element.
+* Even/odd determination is performed using the test instruction and immediate value 1. This determination utilizes the property that even numbers have 0 in the 1st bit and odd numbers have 1 in the 1st bit.
+  - As a result of the determination, if even, it transitions to the end check, and if odd, it transitions to processing that adds the element to a new Vec of only odd numbers.
 
-アドレス`0x00007FF6A4041374`では、Vecの容量チェックが行われている。
-すでに容量の最大値に達している場合、アドレス`0x00007FF6A404137A`に遷移し新しい容量を確保する。
-その後、アドレス`0x00007FF6A4041389`でVecに要素を追加し、管理用構造体における現在の要素数をインクリメントする。
+At address `0x00007FF6A4041374`, a Vec capacity check is performed.
+If the maximum capacity has already been reached, it transitions to address `0x00007FF6A404137A` to secure new capacity.
+Then, at address `0x00007FF6A4041389`, an element is added to Vec, and the current number of elements in the management structure is incremented.
 
-このように、最適化が行われているバイナリでは、イテレータを用いず、C/C++言語のバイナリにおける配列へのアクセスに類似したアセンブリとなる。
+In this way, in binaries where optimization has been performed, iterators are not used, and the assembly is similar to array access in C/C++ language binaries.
 
-### VecDeque型のイテレータ
+### VecDeque Type Iterator
 
-リリースビルドしたバイナリでは、`filter()`、`map()`といった高レベルな処理は、アセンブリ上では確認できないが、iter()の呼び出しは最適化の影響でインライン展開されており、イテレータを取得する処理は確認できる。
-以下は、サンプルプログラムにおける`iter()`のアセンブリを示している。
+In binaries built with release build, high-level processing such as `filter()` and `map()` cannot be confirmed in assembly, but the call to iter() has been inline-expanded due to optimization, and the processing to obtain an iterator can be confirmed.
+The following shows the assembly of `iter()` in the sample program.
 
 ![iterator](images/13-6.png)
 
-アドレス`0x00007FF67AD11820`から`0x00007FF67AD11864`においては、以下のデータが取得されている。
+From address `0x00007FF67AD11820` to `0x00007FF67AD11864`, the following data is obtained:
 
-1.	先頭データを示すアドレス
-2.	バッファーの終端を示すアドレス
-3.	バッファーの先頭アドレス
-4.	終端データ+1を示すアドレス
+1. Address indicating the first data
+2. Address indicating the end of the buffer
+3. Start address of the buffer
+4. Address indicating the end data + 1
 
-これらのデータは、VecDeque型へのアクセスやループ処理に使用されており、この構造がイテレータに該当する。
-また、アドレス`0x00007FF67AD11880`で呼び出される関数は、第二引数としてイテレータを受け取り、`filter()`や`map()`に渡されたクロージャを実行する。
+These data are used for accessing the VecDeque type and loop processing, and this structure corresponds to the iterator.
+Additionally, the function called at address `0x00007FF67AD11880` receives the iterator as the second argument and executes the closure passed to `filter()` and `map()`.
 
-### 32ビットおよび最小化バイナリにおける差異
+### Differences in 32-bit and Minimized Binaries
 
-* Vec型およびVecDeque型では、アドレスサイズを除けば32ビットと64ビットのプログラムの間にイテレータの構造に差異はみられない。
-* Vec型では、リリースビルドおよび最小化ビルドでは、イテレータは省略される。
-* VecDeque型では、リリースビルドおよび最小化ビルドにおいてイテレータが使用されている。
-  - イテレータの構造や取得処理に差異は確認できなかった。
+* For Vec type and VecDeque type, there are no differences in iterator structure between 32-bit and 64-bit programs except for address size.
+* For Vec type, iterators are omitted in release builds and minimized builds.
+* For VecDeque type, iterators are used in release builds and minimized builds.
+  - No differences were confirmed in iterator structure or acquisition processing.
 
-## 使用したサンプルプログラム
+## Sample Programs Used
 
-* Vec型のサンプルプログラム
+* Vec type sample program
 
 ```rust
 fn main() {
-    // 1. Vecの作成
+    // 1. Create Vec
     let mut vec_num = vec![1, 2, 3, 4, 5];
-    
-    // 2. Vecの長さと容量
-    println!("vec_numの長さ: {}, 容量: {}", vec_num.len(), vec_num.capacity());
 
-    // 3. 要素の追加
+    // 2. Vec length and capacity
+    println!("vec_num length: {}, capacity: {}", vec_num.len(), vec_num.capacity());
+
+    // 3. Add element
     vec_num.push(6);
-    println!("vec_numの長さ: {}, 容量: {}", vec_num.len(), vec_num.capacity());
+    println!("vec_num length: {}, capacity: {}", vec_num.len(), vec_num.capacity());
 
     vec_num.insert(3, 99);
 
-    // 4. イテレーション
-    // vec_numを奇数のみのVecにする
+    // 4. Iteration
+    // Make vec_num a Vec of only odd numbers
     let odd_numbers: Vec<i32> = vec_num.iter()
         .filter(|&num| num % 2 != 0)
         .cloned()
         .collect();
-    
-    println!("odd_numbersの要素:");
+
+    println!("odd_numbers elements:");
     for value in &odd_numbers {
         println!("{}", value);
     }
 }
 ```
 
-* VecDeque型のサンプルプログラム
+* VecDeque type sample program
 
 ```rust
 use std::collections::VecDeque;
 
 fn main() {
-    // 1. VecDequeの作成
+    // 1. Create VecDeque
     let mut vec_num = VecDeque::from([2, 3, 4]);
     let vec_iter_test = VecDeque::from([0, 1, 2]);
 
     let it = vec_num.iter();
 
-    // 2. VecDequeの長さと容量
-    println!("vec_numの長さ: {}, 容量: {}", vec_num.len(), vec_num.capacity());
+    // 2. VecDeque length and capacity
+    println!("vec_num length: {}, capacity: {}", vec_num.len(), vec_num.capacity());
 
-    // 3. 要素の追加
+    // 3. Add elements
     vec_num.push_front(1);
     vec_num.push_front(0);
     vec_num.push_back(5);
@@ -164,26 +164,26 @@ fn main() {
     let num = vec_num[3];
     println!("{}", num);
 
-    // 4. 要素の削除
+    // 4. Remove element
     vec_num.pop_front();
 
-    // 5. イテレータトレイト
+    // 5. Iterator trait
     let numbers: VecDeque<i32> = vec_num.iter()
         .filter(|&&num| num % 2 != 0)
         .map(|&num| num * 2)
         .collect();
-    
-    println!("numbersの要素:");
+
+    println!("numbers elements:");
     for value in &numbers {
         println!("{}", value);
     }
-    
+
     let numbers: VecDeque<i32> = vec_iter_test.iter()
         .filter(|&&num| num % 2 != 0)
         .map(|&num| num * 2)
         .collect();
 
-    println!("numbersの要素:");
+    println!("numbers elements:");
     for value in &numbers {
         println!("{}", value);
     }

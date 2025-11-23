@@ -1,24 +1,24 @@
-# 標準・サードパーティライブラリの判別方法
+# Methods for Identifying Standard and Third-Party Libraries
 
-マルウェアを分析する際には、標準ライブラリまたはサードパーティライブラリのコードを識別し、攻撃者が作成したコードを重点的に分析することが望ましい。本調査では、IDA Proの FLIRT を用いた標準ライブラリおよびサードパーティライブラリの関数識別方法について検証を行った。
+When analyzing malware, it is desirable to identify standard library or third-party library code and focus analysis on code created by attackers. In this investigation, we verified methods for identifying standard library and third-party library functions using IDA Pro's FLIRT.
 
-## 調査結果
+## Investigation Results
 
-* [rustbinsign](https://github.com/N0fix/rustbinsign) と [RIFT](https://github.com/microsoft/RIFT) を利用して、標準ライブラリおよびサードパーティライブラリ向けのシグネチャを作成可能。
+* Signatures for standard libraries and third-party libraries can be created using [rustbinsign](https://github.com/N0fix/rustbinsign) and [RIFT](https://github.com/microsoft/RIFT).
 
-* 分析対象マルウェアと同一のコンパイルオプションを使用して生成したシグネチャファイルが、関数識別数と識別精度の両面で最も優れていることが検証により判明した。
+* Verification revealed that signature files generated using the same compilation options as the target malware being analyzed are superior in both the number of identified functions and identification accuracy.
 
-## 詳細
+## Details
 
-### FLIRTシグネチャ作成と適用
+### FLIRT Signature Creation and Application
 
-#### 使用されているライブラリやバージョンの特定
+#### Identifying Used Libraries and Versions
 
-シグネチャの作成に前準備として、解析対象となる実行ファイルがどのクレートを使用しているのか、またRustバージョンを使用しているのかを識別する必要がある。
-そのために、rustbinsignでは`info`コマンドを使用することができる。
-本コマンドを使用することで、rustコンパイラのバージョンや使用しているクレートの特定が可能である。
-rustコンパイラや使用しているクレート名とそのバージョンは、`Location`構造体の`file`フィールドから抽出しているため、
-`location-detail=none`オプションが使用されていると使用しているクレートが取得できなくなる。
+As preparation for signature creation, it is necessary to identify which crates the executable file being analyzed uses and which Rust version is used.
+For this purpose, rustbinsign can use the `info` command.
+By using this command, it is possible to identify the rust compiler version and the crates being used.
+Since the rust compiler and crate names and their versions are extracted from the `file` field of the `Location` structure,
+if the `location-detail=none` option is used, the crates being used cannot be obtained.
 ```
 > rustbinsign info s4killer.exe
 TargetRustInfo(
@@ -40,7 +40,7 @@ TargetRustInfo(
     guessed_toolchain='windows-msvc'
 )
 ```
-また、`RIFT`をIDA Pluginとして適用することで、`json`ファイルとして出力することが可能である。
+Also, by applying `RIFT` as an IDA Plugin, it can be output as a `json` file.
 ```
 {
     "commithash": "05f9846f893b09a1be1fc8560e33fc3c815cfecb",
@@ -63,51 +63,48 @@ TargetRustInfo(
 ```
 ![RIFT](images/23-1.png)
 
-#### 標準ライブラリ
+#### Standard Library
 
-標準ライブラリのシグネチャの作成は、`sign_stdlib`コマンドで作成することができる。
-`rustbinsign`は、`C:\Users\<User名>\.rustup\toolchains`に保存されている標準ライブラリのDLLに対して、`idat`と`idb2pat.py`そして`sigmake`を用いて
-シグネチャファイルを作成している。
+Standard library signatures can be created with the `sign_stdlib` command.
+`rustbinsign` creates signature files for standard library DLLs saved in `C:\Users\<Username>\.rustup\toolchains` using `idat`, `idb2pat.py`, and `sigmake`.
 ```
 > rustbinsign sign_stdlib -t 1.84.0-x86_64-pc-windows-msvc
 ```
-[No.2 バイナリサイズ削減](gitlab.jpcert.or.jp/irt/rust-binary-analysis-research/-/blob/main/Public/Japanese/2_minimize_binary.md)に記載している`build-std`等のオプションを付けない限り、コンパイル済みの標準ライブラリがそのまま静的リンクされる。
-また、`rustbinsign`でもコンパイル済みの標準ライブラリを用いてシグネチャが作成されるため、本コマンドに最適化オプション等を変更してシグネチャを作成するオプションは存在しない。
+Unless options such as `build-std` described in [No.2 Binary size reduction](gitlab.jpcert.or.jp/irt/rust-binary-analysis-research/-/blob/main/Public/Japanese/2_minimize_binary.md) are added, the compiled standard library is statically linked as is.
+Also, since `rustbinsign` creates signatures using the compiled standard library, there are no options to create signatures by changing optimization options etc. for this command.
 
-#### サードパーティライブラリ
+#### Third-Party Libraries
 
-サードパーティライブラリのシグネチャの作成は、`download_sign`または`sign_target`コマンドで作成することができる。
-`download_sign`コマンドでは対象となるクレートを指定し対象のクレートのシグネチャを作成するのに対して、`sign_stdlib`コマンドでは実行ファイルから外部ライブラリの依存関係を抽出してシグネチャの作成を行う。
-シグネチャの作成は、クレートをダウンロードし、`crate-type=dylib`オプションを指定することでDLLを作成し、その後標準ライブラリと同様に
-`idat`と`idb2pat.py`と`sigmake`を用いてシグネチャファイルを作成している。
+Third-party library signatures can be created with the `download_sign` or `sign_target` command.
+The `download_sign` command specifies the target crate and creates a signature for that crate, whereas the `sign_stdlib` command extracts external library dependencies from the executable and creates signatures.
+Signature creation involves downloading crates, creating DLLs by specifying the `crate-type=dylib` option, and then creating signature files using `idat`, `idb2pat.py`, and `sigmake` similar to standard libraries.
 ```
 > rustbinsign download_sign --full-compilation windows-core-0.52.0 1.84.0-x86_64-pc-windows-msvc
 ```
-加えて、`sign_target`コマンドでは、cargoのコンパイルオプションを`--template`オプションにて指定することが可能である。
+Additionally, with the `sign_target` command, cargo compilation options can be specified with the `--template` option.
 
-また、`RIFT`のコンフィグファイルを設定し、Pythonスクリプトで`--flirt`オプションを付け実行することで`release`プロフィールを適用したサードパーティライブラリのシグネチャの作成が可能である。
+Also, by setting the `RIFT` config file and running a Python script with the `--flirt` option, it is possible to create third-party library signatures with the `release` profile applied.
 ```
 [Default]
-PcfPath = <IDAに含まれるFLAIRのpcf.exeのパス>
-SigmakePath = <IDAに含まれるFLAIRのsigmake.exeのパス>
-DiaphoraPath = <Diaphoraに含まれるdiaphora.pyのパス>
-IdatPath = <IDATのパス>
-WorkFolder = <シグネチャ等の出力先となるパス>
-CargoProjFolder = <シグネチャ生成のために作成されるCargoプロジェクトの出力先となるパス>
+PcfPath = <Path to pcf.exe in FLAIR included in IDA>
+SigmakePath = <Path to sigmake.exe in FLAIR included in IDA>
+DiaphoraPath = <Path to diaphora.py included in Diaphora>
+IdatPath = <Path to IDAT>
+WorkFolder = <Path for output of signatures etc.>
+CargoProjFolder = <Path for output of Cargo projects created for signature generation>
 ```
 ```
-> py rift.py --cfg rift_config.cfg --input <IDA Pluginで出力したJSONファイル> --flirt --output <出力先>
+> py rift.py --cfg rift_config.cfg --input <JSON file output by IDA Plugin> --flirt --output <output destination>
 ```
-`RIFT`はこれ以外にも、`--binary-diff`オプションを付け実行し、実行結果をIDA GUI上から指定することで、FLIRTシグネチャではなく、バイナリ差分からサードパーティライブラリの関数を識別することが
-可能である。
+In addition to this, `RIFT` can also identify third-party library functions from binary differences instead of FLIRT signatures by running with the `--binary-diff` option and specifying the execution result from the IDA GUI.
 
-### 検証
+### Verification
 
-シグネチャの識別率を高める方法について検証を行った。
+We verified methods to improve signature identification rates.
 
-#### 検証方法
+#### Verification Method
 
-[s4killer](https://github.com/gavz/s4killer)を以下のCargoコンパイルオプションと[No.2 バイナリサイズ削減](gitlab.jpcert.or.jp/irt/rust-binary-analysis-research/-/blob/main/Public/Japanese/2_minimize_binary.md)に記載したrustcオプションを用いてコンパイルし、関数の識別率と識別精度を測定した。
+We compiled [s4killer](https://github.com/gavz/s4killer) using the following Cargo compilation options and rustc options described in [No.2 Binary size reduction](gitlab.jpcert.or.jp/irt/rust-binary-analysis-research/-/blob/main/Public/Japanese/2_minimize_binary.md), and measured function identification rate and identification accuracy.
 ```
 [profile.dev]
 strip = false
@@ -124,9 +121,9 @@ strip = false
 debug = true
 ```
 
-#### 検証結果
+#### Verification Results
 
-以下の表のとおり、コンパイルオプションが一致した時、最も関数の識別数と識別精度が高くなる傾向にあることが判明した。
+As shown in the table below, it was found that when compilation options match, the number of identified functions and identification accuracy tend to be highest.
 
 | Target / Signature | dev          | release      | minsize      |
 | ------------------ | ------------ | ------------ | ------------ |
