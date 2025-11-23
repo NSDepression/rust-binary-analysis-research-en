@@ -39,6 +39,9 @@ While the primary investigations were conducted on x86-64 (Windows MSVC), this d
 
 The core memory layouts and data structures remain consistent across architectures with the same pointer size (64-bit vs 32-bit), with the main differences being in instruction sets and calling conventions.
 
+**Important Calling Convention Note:**
+⚠️ Rust's calling convention for Rust-to-Rust function calls is neither stable nor even formally defined. The compiler often picks one of the platform's usual calling conventions, but this is not guaranteed and may change between compiler versions. The architecture-specific details provided in this documentation represent common patterns observed but should not be considered stable ABI guarantees.
+
 ## Investigation Topics
 
 This report summarizes the results of investigations on the following topics:

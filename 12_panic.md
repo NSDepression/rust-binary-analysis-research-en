@@ -57,6 +57,8 @@ When `rust_begin_unwind` or similar panic functions are called:
 - First argument (panic message `&str`): pointer in `x0`, length in `x1`
 - Second argument (`&Location`): pointer to Location structure in `x2`
 
+**⚠️ Important:** Rust's calling convention for Rust-to-Rust function calls is not stable and may change between compiler versions. The register usage patterns described represent common observations but should not be considered guaranteed.
+
 **Extraction Benefits:**
 All of this information is embedded in Rust binaries by default and is recoverable statically. You can:
 - Automatically extract all panic location metadata from the binary

@@ -30,6 +30,8 @@ When passing trait objects (fat pointers) as function parameters, different arch
 
 Both architectures follow their standard calling conventions (System V AMD64 ABI for x86-64, and AAPCS64 for ARM64), where composite types up to 16 bytes are passed in consecutive general-purpose registers.
 
+**⚠️ Important:** Rust's calling convention for Rust-to-Rust function calls is not stable and may change between compiler versions. The register usage patterns described here represent common observations but should not be considered guaranteed.
+
 ### VTable Structure
 
 In debug build binaries, function calls are made using a VTable structure.

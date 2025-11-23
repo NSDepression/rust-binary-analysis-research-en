@@ -162,6 +162,8 @@ This follows the ARM64 (AArch64) calling convention where the first eight parame
 - Return values follow similar patterns (x86-64 uses `rax`/`rdx`, ARM64 uses `x0`/`x1`)
 - On both platforms, the fat pointer structure is 16 bytes (two 8-byte values)
 
+**⚠️ Important:** Rust's calling convention for Rust-to-Rust function calls is not stable and may change between compiler versions. The register usage patterns described above represent common observations but should not be considered guaranteed.
+
 ## References
 
 For more detailed information:

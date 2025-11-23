@@ -9,6 +9,29 @@ In this investigation, we examined the `Option` type, which is widely used among
 * For the `Option` type, a discriminant value indicating `Some` or `None` is returned in the eax register. When eax is 1, it indicates `Some`; when 0, it indicates `None`.
   - For `Some`, its value is returned in the edx register.
 
+**Understanding Discriminants:**
+
+The **discriminant** is a value that identifies which variant of an enum is being used. In Rust:
+- The discriminant is typically stored as an integer tag
+- Common idiom in decompiled code: checking the discriminant value to determine enum variant
+- The `std::mem::discriminant` function can be used to extract discriminant values
+- For `Option<T>`: typically 0 for `None`, 1 for `Some(T)`
+- For `Result<T, E>`: typically 0 for `Ok(T)`, 1 for `Err(E)`
+
+**Memory Representation (C-like):**
+```c
+// Option<i32> is similar to:
+enum Option_i32 {
+    None = 0,    // discriminant = 0
+    Some = 1     // discriminant = 1
+};
+
+struct Option_i32_representation {
+    int discriminant;  // 0 or 1
+    int value;         // only valid when discriminant == 1
+};
+```
+
 Note that we confirmed the implementation is the same for 32-bit binaries, except for argument passing methods and address sizes.
 
 ## Details
@@ -113,3 +136,10 @@ fn main() {
     println!("Even number: {}", even_number);
 }
 ```
+
+## References
+
+For more information on Rust enums and discriminants:
+- [The Rust Reference: Discriminants](https://doc.rust-lang.org/reference/items/enumerations.html#discriminants)
+- [std::mem::discriminant](https://doc.rust-lang.org/std/mem/fn.discriminant.html)
+- [Reconstructing Rust Types - RE//verse 2025](https://github.com/cxiao/reconstructing-rust-types-talk-re-verse-2025) - Cindy Xiao's presentation on Rust type reconstruction
